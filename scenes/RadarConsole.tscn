@@ -1,0 +1,612 @@
+[gd_scene format=3 uid="uid://cbbufxf1iwy4h"]
+
+[ext_resource type="Script" uid="uid://c238vxnn4j3by" path="res://scripts/RadarConsole.gd" id="1_console"]
+[ext_resource type="Script" uid="uid://byh5gxaf0gim" path="res://scripts/RadarDome.gd" id="2_dome"]
+[ext_resource type="PackedScene" path="res://scenes/TuningPanel.tscn" id="3_tuning"]
+[ext_resource type="Script" path="res://scripts/RadarContacts.gd" id="4_contacts"]
+[ext_resource type="Script" path="res://scripts/ShipStatus.gd" id="5_status"]
+[ext_resource type="Script" path="res://scripts/ConsoleFrame.gd" id="6_frame"]
+
+[sub_resource type="StyleBoxFlat" id="Button_normal"]
+bg_color = Color(0.045, 0.025, 0.04, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.55, 0.23, 0.38, 1)
+content_margin_top = 4.0
+content_margin_bottom = 4.0
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+corner_detail = 1
+anti_aliasing = true
+
+[sub_resource type="StyleBoxFlat" id="Button_hover"]
+bg_color = Color(0.10, 0.04, 0.08, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(0.95, 0.36, 0.61, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+corner_detail = 1
+anti_aliasing = true
+
+[sub_resource type="StyleBoxFlat" id="Button_pressed"]
+bg_color = Color(0.18, 0.065, 0.11, 1)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.55, 0.72, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+corner_detail = 1
+anti_aliasing = true
+
+[sub_resource type="StyleBoxFlat" id="Button_disabled"]
+bg_color = Color(0.025, 0.02, 0.025, 1)
+border_width_left = 2
+border_width_top = 2
+border_width_right = 2
+border_width_bottom = 2
+border_color = Color(0.23, 0.16, 0.20, 1)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+corner_detail = 1
+anti_aliasing = true
+
+[sub_resource type="Theme" id="Console_theme"]
+default_font_size = 20
+Button/colors/font_color = Color(0.96, 0.85, 0.91, 1)
+Button/colors/font_hover_color = Color(1, 0.95, 0.98, 1)
+Button/colors/font_pressed_color = Color(1, 0.90, 0.65, 1)
+Button/colors/font_disabled_color = Color(0.53, 0.47, 0.51, 1)
+Button/styles/normal = SubResource("Button_normal")
+Button/styles/hover = SubResource("Button_hover")
+Button/styles/pressed = SubResource("Button_pressed")
+Button/styles/disabled = SubResource("Button_disabled")
+Button/styles/focus = SubResource("Button_hover")
+
+[sub_resource type="Theme" id="Tuning_theme"]
+default_font_size = 18
+
+[sub_resource type="StyleBoxFlat" id="StyleBox_game_over"]
+bg_color = Color(0.018, 0.005, 0.008, 0.97)
+border_width_left = 3
+border_width_top = 3
+border_width_right = 3
+border_width_bottom = 3
+border_color = Color(1, 0.14, 0.19, 1)
+
+[node name="RadarConsole" type="Control" unique_id=512017801]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_console")
+theme = SubResource("Console_theme")
+
+[node name="Background" type="ColorRect" parent="." unique_id=145037367]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 1)
+
+[node name="ConsoleFrame" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+script = ExtResource("6_frame")
+console_layout_v2 = true
+
+[node name="CenterContainer" type="CenterContainer" parent="." unique_id=915203150]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_bottom = -120.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Dome" type="Control" parent="CenterContainer" unique_id=805079011]
+custom_minimum_size = Vector2(900, 800)
+layout_mode = 2
+script = ExtResource("2_dome")
+sphere_line_width = 1.7
+ring_color = Color(0.3254902, 0.34117648, 1, 1)
+ring_thickness = 0.4
+ring_glow_thickness = 5.0
+ring_rotation_seconds = 4.0
+ring_horizontal_hinge_front_back = true
+ring_trail_enabled = true
+scanlines_inside_scope = true
+ripple_color = Color(0.3254902, 0.6862745, 1, 1)
+ripple_max_radius = 320.0
+ripples_match_ring_plane = true
+ripple_period_seconds = 6.0
+three_rings_enabled = false
+
+[node name="Contacts" type="Control" parent="CenterContainer/Dome"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("4_contacts")
+keep_play_in_wedge = true
+civilian_size_toughness = true
+civilian_evasion = true
+protect_patrol_interceptors = 1
+protect_jump_in_hold = 2.0
+protect_round_sounds = true
+civilian_hull_bar = true
+protect_round_counter = true
+protect_challenge_mix = true
+protect_extra_drones = 1
+protect_later_kill_time_factor = 0.75
+protect_dogfights = true
+protect_interceptors_stay_out = true
+protect_label_declutter = true
+civilian_large_evade_speed = 0.02
+civilian_self_repair = true
+protect_repair_tender = true
+ship_missiles_spread_carriers = true
+double_missile_quick_pair = true
+carrier_second_nuke = true
+rapid_missile_bonus = true
+rapid_repair_needs_shown_damage = true
+missile_bonus_pick_after_wave = true
+
+[node name="GameOverPanel" type="Panel" parent="CenterContainer/Dome"]
+visible = false
+layout_mode = 1
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -320.0
+offset_right = 300.0
+offset_bottom = 320.0
+theme_override_styles/panel = SubResource("StyleBox_game_over")
+
+[node name="Title" type="Label" parent="CenterContainer/Dome/GameOverPanel"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 12.0
+offset_right = 580.0
+offset_bottom = 64.0
+theme_override_colors/font_color = Color(1, 0.2, 0.24, 1)
+theme_override_font_sizes/font_size = 42
+text = "Game Over"
+horizontal_alignment = 1
+
+[node name="Retry" type="Button" parent="CenterContainer/Dome/GameOverPanel"]
+layout_mode = 0
+offset_left = 200.0
+offset_top = 566.0
+offset_right = 400.0
+offset_bottom = 618.0
+theme_override_font_sizes/font_size = 24
+text = "Retry"
+
+[node name="FinalScore" type="Label" parent="CenterContainer/Dome/GameOverPanel"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 66.0
+offset_right = 580.0
+offset_bottom = 100.0
+theme_override_font_sizes/font_size = 24
+text = "FINAL SCORE  0"
+horizontal_alignment = 1
+
+[node name="EntryPrompt" type="Label" parent="CenterContainer/Dome/GameOverPanel"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 104.0
+offset_right = 580.0
+offset_bottom = 130.0
+theme_override_colors/font_color = Color(1, 0.89, 0.55, 1)
+theme_override_font_sizes/font_size = 18
+text = "NEW HIGH SCORE  |  ENTER YOUR INITIALS"
+horizontal_alignment = 1
+
+[node name="Entry" type="Control" parent="CenterContainer/Dome/GameOverPanel"]
+layout_mode = 0
+offset_top = 136.0
+offset_right = 600.0
+offset_bottom = 256.0
+mouse_filter = 2
+
+[node name="Up0" type="Button" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 143.0
+offset_right = 183.0
+offset_bottom = 30.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+tooltip_text = "Next letter"
+
+[node name="Letter0" type="Label" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 135.0
+offset_top = 30.0
+offset_right = 191.0
+offset_bottom = 86.0
+theme_override_font_sizes/font_size = 42
+text = "A"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Down0" type="Button" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 143.0
+offset_top = 86.0
+offset_right = 183.0
+offset_bottom = 116.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+tooltip_text = "Previous letter"
+
+[node name="Up1" type="Button" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 213.0
+offset_right = 253.0
+offset_bottom = 30.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+tooltip_text = "Next letter"
+
+[node name="Letter1" type="Label" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 205.0
+offset_top = 30.0
+offset_right = 261.0
+offset_bottom = 86.0
+theme_override_font_sizes/font_size = 42
+text = "A"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Down1" type="Button" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 213.0
+offset_top = 86.0
+offset_right = 253.0
+offset_bottom = 116.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+tooltip_text = "Previous letter"
+
+[node name="Up2" type="Button" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 283.0
+offset_right = 323.0
+offset_bottom = 30.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+tooltip_text = "Next letter"
+
+[node name="Letter2" type="Label" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 275.0
+offset_top = 30.0
+offset_right = 331.0
+offset_bottom = 86.0
+theme_override_font_sizes/font_size = 42
+text = "A"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="Down2" type="Button" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 283.0
+offset_top = 86.0
+offset_right = 323.0
+offset_bottom = 116.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 16
+tooltip_text = "Previous letter"
+
+[node name="Enter" type="Button" parent="CenterContainer/Dome/GameOverPanel/Entry"]
+layout_mode = 0
+offset_left = 355.0
+offset_top = 36.0
+offset_right = 465.0
+offset_bottom = 80.0
+focus_mode = 0
+theme_override_font_sizes/font_size = 20
+text = "ENTER"
+
+[node name="BoardTitle" type="Label" parent="CenterContainer/Dome/GameOverPanel"]
+layout_mode = 0
+offset_left = 20.0
+offset_top = 262.0
+offset_right = 580.0
+offset_bottom = 288.0
+theme_override_colors/font_color = Color(0.72, 0.66, 0.7, 1)
+theme_override_font_sizes/font_size = 18
+text = "TOP 10 HIGH SCORES"
+horizontal_alignment = 1
+
+[node name="Rows" type="Control" parent="CenterContainer/Dome/GameOverPanel"]
+layout_mode = 0
+offset_left = 110.0
+offset_top = 294.0
+offset_right = 490.0
+offset_bottom = 554.0
+mouse_filter = 2
+
+[node name="ShipStatus" type="Control" parent="."]
+layout_mode = 1
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -204.0
+offset_top = -265.0
+offset_right = 204.0
+offset_bottom = -115.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+script = ExtResource("5_status")
+
+[node name="TopChrome" type="Label" parent="." unique_id=1259142572]
+layout_mode = 1
+anchors_preset = 10
+offset_left = 84.0
+offset_right = 410.0
+offset_top = 48.0
+offset_bottom = 84.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 0.35, 0.6, 1)
+theme_override_font_sizes/font_size = 30
+text = "RADAR"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="."]
+offset_left = 84.0
+offset_top = 88.0
+offset_right = 410.0
+offset_bottom = 112.0
+theme_override_font_sizes/font_size = 16
+theme_override_colors/font_color = Color(0.72, 0.66, 0.70, 1)
+text = "TACTICAL DEFENSE CONSOLE"
+
+[node name="HeaderMetrics" type="HBoxContainer" parent="."]
+layout_mode = 1
+anchor_right = 1.0
+offset_left = 448.0
+offset_right = -484.0
+offset_top = 46.0
+offset_bottom = 114.0
+theme_override_constants/separation = 20
+
+[node name="Enemies" type="VBoxContainer" parent="HeaderMetrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="Caption" type="Label" parent="HeaderMetrics/Enemies"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "ENEMY FIGHTERS"
+horizontal_alignment = 1
+[node name="Value" type="Label" parent="HeaderMetrics/Enemies"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(1, 0.4, 0.48, 1)
+text = "0"
+horizontal_alignment = 1
+
+[node name="Interceptors" type="VBoxContainer" parent="HeaderMetrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="Caption" type="Label" parent="HeaderMetrics/Interceptors"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "INTERCEPTORS ACTIVE"
+horizontal_alignment = 1
+[node name="Value" type="Label" parent="HeaderMetrics/Interceptors"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(0.5, 0.9, 0.68, 1)
+text = "0 / 6"
+horizontal_alignment = 1
+
+[node name="Gunships" type="VBoxContainer" parent="HeaderMetrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="Caption" type="Label" parent="HeaderMetrics/Gunships"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "GUNSHIPS"
+horizontal_alignment = 1
+[node name="Value" type="Label" parent="HeaderMetrics/Gunships"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(0.5, 0.9, 0.68, 1)
+text = "0 / 2"
+horizontal_alignment = 1
+
+[node name="Enemy Carriers" type="VBoxContainer" parent="HeaderMetrics"]
+layout_mode = 2
+size_flags_horizontal = 3
+[node name="Caption" type="Label" parent="HeaderMetrics/Enemy Carriers"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 18
+text = "ENEMY CARRIERS"
+horizontal_alignment = 1
+[node name="Value" type="Label" parent="HeaderMetrics/Enemy Carriers"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 30
+theme_override_colors/font_color = Color(1, 0.4, 0.48, 1)
+text = "0"
+horizontal_alignment = 1
+
+[node name="ScoreCaption" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -400.0
+offset_right = -82.0
+offset_top = 46.0
+offset_bottom = 70.0
+theme_override_font_sizes/font_size = 18
+text = "SCORE"
+horizontal_alignment = 2
+
+[node name="ScoreValue" type="Label" parent="."]
+layout_mode = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -400.0
+offset_right = -82.0
+offset_top = 72.0
+offset_bottom = 116.0
+theme_override_font_sizes/font_size = 36
+theme_override_colors/font_color = Color(1, 0.60, 0.78, 1)
+text = "0"
+horizontal_alignment = 2
+
+[node name="BottomButtons" type="HBoxContainer" parent="." unique_id=479809691]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 80.0
+offset_top = -100.0
+offset_right = -80.0
+offset_bottom = -36.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_constants/separation = 16
+alignment = 1
+
+[node name="RapidRepair" type="Button" parent="BottomButtons"]
+custom_minimum_size = Vector2(255, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "RAPID REPAIR"
+
+[node name="Jump" type="Button" parent="BottomButtons" unique_id=422355859]
+custom_minimum_size = Vector2(255, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "JUMP"
+
+[node name="ProxDefense" type="Button" parent="BottomButtons" unique_id=1147496004]
+custom_minimum_size = Vector2(255, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = "DEFENSE SHIELD"
+
+[node name="Firewall" type="Button" parent="BottomButtons"]
+custom_minimum_size = Vector2(255, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+toggle_mode = true
+text = "FIREWALL"
+
+[node name="LaunchInterceptors" type="Button" parent="BottomButtons" unique_id=1964718380]
+custom_minimum_size = Vector2(255, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "LAUNCH INTERCEPTORS"
+
+[node name="LaunchGunship" type="Button" parent="BottomButtons"]
+custom_minimum_size = Vector2(255, 64)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "LAUNCH GUNSHIP"
+
+[node name="BattleReadout" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 10
+offset_left = 82.0
+offset_right = 420.0
+offset_top = 536.0
+offset_bottom = 724.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.72, 0.66, 0.70, 1)
+theme_override_font_sizes/font_size = 18
+text = "INCOMING MISSILES 0"
+
+[node name="HackAlert" type="Label" parent="."]
+layout_mode = 1
+offset_left = 390.0
+offset_top = 824.0
+offset_right = 745.0
+offset_bottom = 958.0
+theme_override_font_sizes/font_size = 17
+mouse_filter = 2
+
+[node name="BattleStatus" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 448.0
+offset_right = -448.0
+offset_top = 128.0
+offset_bottom = 153.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_colors/font_color = Color(0.5, 0.85, 0.95, 0.8)
+theme_override_font_sizes/font_size = 18
+text = "DEFEND THE LOWER SCOPE"
+horizontal_alignment = 1
+
+[node name="NuclearAlert" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchor_right = 1.0
+offset_left = 448.0
+offset_right = -448.0
+offset_top = 128.0
+offset_bottom = 153.0
+grow_horizontal = 2
+mouse_filter = 2
+theme_override_font_sizes/font_size = 20
+text = "NUCLEAR MISSILE INBOUND"
+horizontal_alignment = 1
+
+[node name="TuningPanel" parent="." unique_id=624471903 instance=ExtResource("3_tuning")]
+layout_mode = 1
+offset_left = -440.0
+offset_top = -565.0
+offset_right = -60.0
+offset_bottom = -110.0
+theme = SubResource("Tuning_theme")
+
+[node name="SweepLoop" type="AudioStreamPlayer" parent="."]
+volume_db = -6.0
+bus = "Master"
+
+[connection signal="pressed" from="BottomButtons/RapidRepair" to="." method="_on_rapid_repair_pressed"]
+[connection signal="pressed" from="BottomButtons/Jump" to="." method="_on_jump_pressed"]
+[connection signal="toggled" from="BottomButtons/ProxDefense" to="." method="_on_prox_defense_toggled"]
+[connection signal="pressed" from="BottomButtons/LaunchInterceptors" to="." method="_on_launch_interceptors_pressed"]
+[connection signal="toggled" from="BottomButtons/Firewall" to="." method="_on_firewall_toggled"]
+[connection signal="pressed" from="CenterContainer/Dome/GameOverPanel/Retry" to="." method="_on_restart_pressed"]
+[connection signal="pressed" from="BottomButtons/LaunchGunship" to="." method="_on_launch_gunship_pressed"]

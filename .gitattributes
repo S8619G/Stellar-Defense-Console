@@ -1,0 +1,11 @@
+# Normalize text files to LF line endings (matches Godot's own files)
+* text=auto eol=lf
+
+# Binary assets
+*.png binary
+*.jpg binary
+*.wav binary
+*.ogg binary
+*.mp4 binary
+*.ico binary
+*.icns binary

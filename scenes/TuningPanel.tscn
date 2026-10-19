@@ -1,0 +1,177 @@
+[gd_scene format=3 uid="uid://radar_tuning"]
+
+[node name="TuningPanel" type="Panel"]
+layout_mode = 3
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -360.0
+offset_top = -560.0
+offset_right = -20.0
+offset_bottom = -100.0
+grow_horizontal = 0
+grow_vertical = 0
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = 12.0
+offset_right = -12.0
+offset_bottom = -12.0
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="VBox"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.35, 0.6, 1)
+text = "RADAR TUNING  (F1 to hide)"
+horizontal_alignment = 1
+
+; --- Ring Count ---
+[node name="RingCount" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/RingCount"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Ring Count"
+
+[node name="Slider" type="HSlider" parent="VBox/RingCount"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.0
+max_value = 6.0
+step = 1.0
+
+[node name="Value" type="Label" parent="VBox/RingCount"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "2"
+horizontal_alignment = 2
+
+; --- Speed ---
+[node name="Speed" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/Speed"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Rotation (sec)"
+
+[node name="Slider" type="HSlider" parent="VBox/Speed"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 0.5
+max_value = 20.0
+step = 0.1
+
+[node name="Value" type="Label" parent="VBox/Speed"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "4.0s"
+horizontal_alignment = 2
+
+; --- Hinged ---
+[node name="Hinged" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/Hinged"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Hinged at top"
+
+[node name="Check" type="CheckBox" parent="VBox/Hinged"]
+layout_mode = 2
+
+; --- Ring A Tilt ---
+[node name="RingATilt" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/RingATilt"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Ring A tilt"
+
+[node name="Slider" type="HSlider" parent="VBox/RingATilt"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -180.0
+max_value = 180.0
+step = 1.0
+
+[node name="Value" type="Label" parent="VBox/RingATilt"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "0°"
+horizontal_alignment = 2
+
+; --- Ring B Tilt ---
+[node name="RingBTilt" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/RingBTilt"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Ring B tilt"
+
+[node name="Slider" type="HSlider" parent="VBox/RingBTilt"]
+custom_minimum_size = Vector2(150, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = -180.0
+max_value = 180.0
+step = 1.0
+
+[node name="Value" type="Label" parent="VBox/RingBTilt"]
+custom_minimum_size = Vector2(50, 0)
+layout_mode = 2
+text = "90°"
+horizontal_alignment = 2
+
+; --- Sphere ---
+[node name="Sphere" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/Sphere"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Sphere outline"
+
+[node name="Check" type="CheckBox" parent="VBox/Sphere"]
+layout_mode = 2
+
+; --- Ripples ---
+[node name="Ripples" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/Ripples"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Base ripples"
+
+[node name="Check" type="CheckBox" parent="VBox/Ripples"]
+layout_mode = 2
+
+; --- Scanlines ---
+[node name="Scanlines" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+
+[node name="Label" type="Label" parent="VBox/Scanlines"]
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+text = "Scanlines"
+
+[node name="Check" type="CheckBox" parent="VBox/Scanlines"]
+layout_mode = 2
+
+[node name="Help" type="Label" parent="VBox"]
+layout_mode = 2
+autowrap_mode = 3
+text = "Tweak values live. Nothing saves; edits persist until you close the game."

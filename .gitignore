@@ -1,0 +1,26 @@
+# Godot 4 editor cache and imported files (rebuilt automatically when the project is opened).
+# The one kept file makes "Export With Debug" start unchecked.
+.godot/*
+!.godot/editor/
+.godot/editor/*
+!.godot/editor/project_metadata.cfg
+
+# Exported games and packages: attach these to a GitHub Release instead of committing them
+*.exe
+*.dmg
+*.app/
+*.zip
+*.pck
+*.x86_64
+*.tar.gz
+
+# Reference material is kept out of the public repository
+references/
+
+# Operating system files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local logs
+*.log

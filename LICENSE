@@ -1,0 +1,23 @@
+Copyright (c) 2026 S8619G. All rights reserved.
+
+Stellar Defense Console, including its source code, scenes, artwork, icons,
+audio and documentation, is proprietary software.
+
+The source code is published in this repository for viewing only. No license
+is granted to copy, modify, merge, publish, distribute, sublicense, sell or
+create derivative works from any part of it, in source or compiled form,
+without prior written permission from the copyright holder.
+
+Downloading a released copy of the game from this repository's Releases page
+grants permission to install and play that copy for personal, non-commercial
+use. It does not grant permission to redistribute or sell it.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+This game is built with the Godot Engine, which is licensed separately under
+the MIT License. See NOTICE.md.

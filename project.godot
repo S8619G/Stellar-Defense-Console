@@ -1,0 +1,216 @@
+; Engine configuration file.
+; It's best edited using the editor UI and not directly,
+; since the parameters that go here are not all obvious.
+;
+; Format:
+;   [section] ; section goes between []
+;   param=value ; assign values to parameters
+
+config_version=5
+
+[animation]
+
+compatibility/default_parent_skeleton_in_mesh_instance_3d=true
+
+[application]
+
+boot_splash/bg_color=Color(0, 0, 0, 1)
+boot_splash/image="res://assets/splash/stellar_defense_console_splash.png"
+boot_splash/minimum_display_time=4000
+config/name="Stellar Defense Console"
+config/description="Stellar Defense Console tactical defense game (Windows, macOS, Linux)"
+config/version="1.0.1"
+config/use_custom_user_dir=true
+config/custom_user_dir_name="Stellar Defense Console"
+run/main_scene="res://scenes/RadarConsole.tscn"
+config/features=PackedStringArray("4.7", "GL Compatibility")
+config/icon="res://assets/aegis_app_icon.png"
+
+[debug]
+
+file_logging/max_log_files=10
+
+[display]
+
+window/size/viewport_width=1920
+window/size/viewport_height=1080
+window/size/window_width_override=1600
+window/size/window_height_override=900
+window/stretch/mode="canvas_items"
+
+[rendering]
+
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+gl_compatibility/force_angle_on_devices=[{
+"name": "Radeon 9",
+"vendor": "ATI"
+}, {
+"name": "Radeon X",
+"vendor": "ATI"
+}, {
+"name": "Radeon HD 2",
+"vendor": "ATI"
+}, {
+"name": "Radeon HD 3",
+"vendor": "ATI"
+}, {
+"name": "Radeon HD 4",
+"vendor": "ATI"
+}, {
+"name": "Radeon HD 5",
+"vendor": "ATI"
+}, {
+"name": "Radeon HD 6",
+"vendor": "ATI"
+}, {
+"name": "Radeon HD 7",
+"vendor": "ATI"
+}, {
+"name": "Radeon HD 8",
+"vendor": "ATI"
+}, {
+"name": "Radeon(TM) R2 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon(TM) R3 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon(TM) R4 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon(TM) R5 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon(TM) R6 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon(TM) R7 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon(TM) R7 Graphics",
+"vendor": "AMD"
+}, {
+"name": "Radeon(TM) R8 Graphics",
+"vendor": "AMD"
+}, {
+"name": "Radeon R5 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon R6 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon R7 Graphics",
+"vendor": "ATI"
+}, {
+"name": "Radeon R7 Graphics",
+"vendor": "AMD"
+}, {
+"name": "Radeon R8 Graphics",
+"vendor": "AMD"
+}, {
+"name": "Radeon R5 2",
+"vendor": "ATI"
+}, {
+"name": "Radeon R7 2",
+"vendor": "ATI"
+}, {
+"name": "Radeon R9 2",
+"vendor": "ATI"
+}, {
+"name": "Radeon R5 M2",
+"vendor": "ATI"
+}, {
+"name": "Radeon R7 M2",
+"vendor": "ATI"
+}, {
+"name": "Radeon R9 M2",
+"vendor": "ATI"
+}, {
+"name": "Radeon (TM) R9 Fury",
+"vendor": "ATI"
+}, {
+"name": "Radeon (TM) R5 3",
+"vendor": "ATI"
+}, {
+"name": "Radeon (TM) R5 3",
+"vendor": "AMD"
+}, {
+"name": "Radeon (TM) R7 3",
+"vendor": "ATI"
+}, {
+"name": "Radeon (TM) R7 3",
+"vendor": "AMD"
+}, {
+"name": "Radeon (TM) R9 3",
+"vendor": "ATI"
+}, {
+"name": "Radeon (TM) R9 3",
+"vendor": "AMD"
+}, {
+"name": "Radeon (TM) R5 M3",
+"vendor": "ATI"
+}, {
+"name": "Radeon (TM) R5 M3",
+"vendor": "AMD"
+}, {
+"name": "Radeon (TM) R7 M3",
+"vendor": "ATI"
+}, {
+"name": "Radeon (TM) R7 M3",
+"vendor": "AMD"
+}, {
+"name": "Radeon (TM) R9 M3",
+"vendor": "ATI"
+}, {
+"name": "Radeon (TM) R9 M3",
+"vendor": "AMD"
+}, {
+"name": "Intel(R) HD Graphics",
+"vendor": "Intel"
+}, {
+"name": "Intel HD Graphics",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Vallyview Graphics",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris(TM) Graphics 5100",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris(TM) Pro Graphics 5200",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris(TM) Graphics 6100",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris(TM) Pro Graphics 6200",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris(TM) Pro Graphics P6300",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris Graphics 540",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris Plus Graphics 640",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris Plus Graphics 650",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris Pro Graphics 580",
+"vendor": "Intel"
+}, {
+"name": "Intel(R) Iris Pro Graphics P580",
+"vendor": "Intel"
+}, {
+"name": "Qualcomm",
+"vendor": "Microsoft"
+}, {
+"name": "*",
+"vendor": "Qualcomm"
+}]
+textures/vram_compression/import_s3tc_bptc=true
+textures/vram_compression/import_etc2_astc=true
+environment/defaults/default_clear_color=Color(0, 0, 0, 1)
