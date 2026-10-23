@@ -59,6 +59,9 @@ func game_over_with(points: int) -> void:
 	c.earned_points = points
 	c.apply_damage(10000.0)
 	console._process(0.016)
+	# 1.0.8: the score screen comes in front 3 s after the ship is destroyed (SYSTEMS OFFLINE first).
+	console.damage_effects.skip_to_score_screen()
+	console._process(0.016)
 
 func _run() -> void:
 	console = load("res://scenes/RadarConsole.tscn").instantiate()

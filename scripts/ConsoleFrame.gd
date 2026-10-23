@@ -699,20 +699,45 @@ func alert_box_poly() -> PackedVector2Array:
 ## 1.2.9: PROTECT THE FLEET with SHIPS n OF m, ATTACK DRONES n LEFT and TIME m:ss.
 func protect_counter_rows() -> Array:
 	var left_s := maxi(0, ceili(battle.protect_time_left()))
-	return [["SHIPS", "%d OF %d" % [battle.civilians_left(), battle.protect_civilians_total], battle.civilian_color],
-		["ATTACK DRONES", "%d LEFT" % battle.protect_drones_left(), Color(1.0, 0.36, 0.36)],
+	var rows: Array = [["SHIPS", "%d OF %d" % [battle.civilians_left(), battle.protect_civilians_total], battle.civilian_color],
+		["DRONES", "%d LEFT" % battle.protect_drones_left(), Color(1.0, 0.36, 0.36)],
 		["TIME", "%d:%02d" % [floori(left_s / 60.0), left_s % 60], Color8(230, 220, 228)]]
+	# 1.0.7: no time limit; the third row shows the Interceptors still in the fight.
+	if not battle.protect_timer_end:
+		rows[2] = ["INTERCEPTORS", "%d LEFT" % battle.protect_interceptors_left(), battle.friendly_color]
+	# 1.0.7: a fourth row while the round has a Breacher.
+	if battle.protect_breachers_total > 0:
+		var state := "SOON"
+		var color := Color(1.0, 0.36, 0.36)
+		if battle.convoy_breachers_latched() > 0:
+			state = "LATCHED"
+		elif battle.convoy_breachers_left() > 0:
+			state = "INBOUND"
+		elif battle.protect_breachers_spawned >= battle.protect_breachers_total:
+			state = "DOWN"
+			color = Color8(160, 150, 158)
+		rows.append(["BREACHER", state, color])
+	return rows
 
 func _draw_protect_counter(x0: float, y0: float, fs: int, k: float) -> void:
 	var font := ThemeDB.fallback_font
-	draw_string(font, Vector2(x0, y0 + font.get_ascent(fs)), "PROTECT THE FLEET", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color8(240, 170, 205))
+	draw_string(font, Vector2(x0, y0 + font.get_ascent(fs)), "PROTECT THE CONVOY", HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color8(240, 170, 205))
 	var line_h := font.get_height(fs) * 1.25
 	var value_fs := maxi(10, int(round(14.0 * k)))
+	var rows := protect_counter_rows()
+	# 1.0.7: four rows fit with slightly tighter spacing.
+	if rows.size() > 3:
+		line_h = font.get_height(fs) * 1.08
 	var y := y0 + font.get_height(fs) + line_h * 0.4
-	for row in protect_counter_rows():
+	# 1.0.7: the values start after the widest label, so a label never runs into its value.
+	var value_x := 0.0
+	for row in rows:
+		value_x = maxf(value_x, font.get_string_size(row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+	value_x = x0 + maxf(70.0 * k, value_x + 10.0 * k)
+	for row in rows:
 		y += line_h
 		draw_string(font, Vector2(x0, y), row[0], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color8(200, 150, 180))
-		draw_string(font, Vector2(x0 + 70.0 * k, y), row[1], HORIZONTAL_ALIGNMENT_LEFT, -1, value_fs, row[2])
+		draw_string(font, Vector2(value_x, y), row[1], HORIZONTAL_ALIGNMENT_LEFT, -1, value_fs, row[2])
 
 func _v2_alert_box() -> void:
 	var k := _frame_scale()

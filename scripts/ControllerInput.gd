@@ -12,7 +12,8 @@ extends Node
 ##                left stick moves the highlight, A presses it and B goes back.
 ##                Left/right adjusts a highlighted volume slider.
 ##   Initials:    up/down changes the letter, left/right moves, A saves.
-##   CHANGE:      the next button pressed is given to the action.
+##   Action list: (1.0.4, CHANGE in the Controller panel) the D-pad or left stick
+##                moves the highlight, A picks, B goes back one step.
 ## MENU (Options) always opens or closes Settings and cancels a CHANGE.
 ##
 ## Battle actions go through the console's own buttons and handlers, so cooldowns,
@@ -61,6 +62,21 @@ var presses: int = 0
 ## Any controller input seen (menus show the highlight only after that).
 var used_controller: bool = false
 var connection_events: Array[String] = []
+## 1.0.2: the last controller button seen (for the controller check) and how many
+## controller events arrived in total, from any device.
+var last_button_seen: String = ""
+var events_seen: int = 0
+## 1.0.2: battle flash on the console button a controller press used.
+@export_range(0.1, 1.0) var press_flash_seconds: float = 0.3
+var flash_control: Control
+var flash_left: float = 0.0
+## Godot's own log, read to find out whether the controller system started.
+var engine_log_file: String = "user://logs/godot.log"
+const DRIVER_FAILED_TEXT := "Couldn't initialize SDL joypad input driver"
+## The engine log is read again at most this often for the status line.
+const DRIVER_RECHECK_MSEC := 10000
+var _driver_cached: String = ""
+var _driver_checked_msec: int = -1
 
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
@@ -96,7 +112,9 @@ func context() -> String:
 		return "none"
 	var panel: Control = console.controller_panel
 	if is_instance_valid(panel) and panel.visible:
-		return "capture" if panel.is_capturing() else "controller"
+		if panel.is_picking():
+			return "picker"
+		return "test" if panel.is_testing() else "controller"
 	if console.settings_open:
 		return "settings"
 	if console.bonus_pick_open:
@@ -106,20 +124,22 @@ func context() -> String:
 	return "battle"
 
 func is_menu_context(name: String) -> bool:
-	return name in ["controller", "settings", "bonus", "game_over"]
+	return name in ["controller", "picker", "settings", "bonus", "game_over"]
 
 ## Controls the highlight can move between on the current screen.
 func targets() -> Array[Control]:
 	var found: Array[Control] = []
 	match context():
-		"controller":
+		"controller", "picker":
 			found = console.controller_panel.focus_targets()
 		"settings":
 			for node in console.settings_panel.panel.find_children("*", "", true, false):
 				if (node is BaseButton or node is HSlider) and node.is_visible_in_tree() and node.focus_mode != Control.FOCUS_NONE:
 					found.append(node)
 		"bonus":
-			found = [console.bonus_pick_panel.keep_button, console.bonus_pick_panel.take_button]
+			# 1.0.5: the two cards are the pick buttons (YOU HAVE NOW first, highlighted).
+			for card in console.bonus_pick_panel.cards:
+				found.append(card)
 		"game_over":
 			found = [console.restart_button, console.game_over_quit_button]
 		"battle":
@@ -142,9 +162,11 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventJoypadButton:
 		get_viewport().set_input_as_handled()
 		used_controller = true
+		events_seen += 1
 		_on_button_event(event.device, event.button_index, event.pressed)
 	elif event is InputEventJoypadMotion:
 		get_viewport().set_input_as_handled()
+		events_seen += 1
 		_on_motion_event(event.device, event.axis, event.axis_value)
 	elif event is InputEventMouseButton and event.pressed and battle_highlight_visible:
 		# Back to the mouse: the battle highlight steps aside.
@@ -167,6 +189,9 @@ func _on_button_event(device: int, index: int, pressed: bool) -> void:
 	elif device != active_device:
 		return
 	var id := button_id(index)
+	if pressed:
+		last_button_seen = id
+	_light(id, pressed)
 	if id.begins_with("dpad"):
 		var dir: Vector2i = {"dpad_up": Vector2i.UP, "dpad_down": Vector2i.DOWN, "dpad_left": Vector2i.LEFT, "dpad_right": Vector2i.RIGHT}[id]
 		if pressed and not held.get(id, false):
@@ -215,12 +240,16 @@ func _on_motion_event(device: int, axis: int, value: float) -> void:
 		if dir != Vector2i.ZERO:
 			_take_device(device)
 			used_controller = true
+			last_button_seen = "stick"
 			_direction_pressed(dir)
 			repeat_timer = repeat_delay
 		stick_direction = dir
+		_light("stick", dir != Vector2i.ZERO)
 
 func _on_trigger(id: String, pressed: bool) -> void:
+	_light(id, pressed)
 	if pressed:
+		last_button_seen = id
 		held[id] = true
 		_press(id)
 	else:
@@ -254,18 +283,29 @@ static func button_id(index: int) -> String:
 		JOY_BUTTON_DPAD_RIGHT: return "dpad_right"
 	return "other%d" % index
 
+## 1.0.5: any controller button, trigger or stick/D-pad move stops the bonus pick
+## countdown; the pop-up then waits for a pick.
+func _note_bonus_input() -> void:
+	if is_instance_valid(console) and context() == "bonus":
+		console.bonus_pick_panel.stop_countdown("controller")
+
 func _press(id: String) -> void:
+	_note_bonus_input()
 	presses += 1
 	if is_instance_valid(console) and is_instance_valid(console.session_log) and console.session_log.has_method("count_controller_press"):
 		console.session_log.count_controller_press()
 	var where := context()
+	if where == "test":
+		# TEST BUTTONS: presses only light up their assignment; MENU ends the test.
+		if id == "menu":
+			console.controller_panel.stop_test()
+			_after_context_change()
+		return
 	if id == "menu":
 		_on_menu(where)
 		return
 	match where:
-		"capture":
-			console.controller_panel.capture(id)
-		"controller", "settings", "bonus", "game_over":
+		"controller", "picker", "settings", "bonus", "game_over":
 			if id == "a":
 				activate(current_target())
 			elif id == "b":
@@ -294,8 +334,9 @@ func _release(id: String) -> void:
 func _on_menu(where: String) -> void:
 	cancel_jump("menu")
 	match where:
-		"capture":
-			console.controller_panel.cancel_capture()
+		"picker":
+			# MENU closes the action list without a change; the panel stays open.
+			console.controller_panel.cancel_picker()
 		"controller":
 			console.close_controller_panel()
 			console.close_settings()
@@ -307,7 +348,7 @@ func _on_menu(where: String) -> void:
 
 func _back(where: String) -> void:
 	match where:
-		"controller":
+		"controller", "picker":
 			console.controller_panel.back()
 		"settings":
 			console.close_settings()
@@ -338,12 +379,28 @@ func perform(action: String, from_button: String = "") -> bool:
 			return _press_button(console.repair_button)
 		"jump":
 			return start_jump(from_button)
+		"launch_stealth":
+			# 1.0.4: the center special weapon, only while it is offered.
+			var ship: Control = console.get_node_or_null("ShipStatus")
+			return is_instance_valid(ship) and _press_button(ship.stealth_button)
+		"emp":
+			# 1.0.4: the EMP half of the FIREWALL button, else the EMP on the ship.
+			if is_instance_valid(console.emp_split_button) and console.emp_split_button.is_visible_in_tree():
+				return _press_button(console.emp_split_button)
+			var ship: Control = console.get_node_or_null("ShipStatus")
+			return is_instance_valid(ship) and _press_button(ship.emp_button)
 	return false
 
 ## Press a console button the way a click would: nothing happens while it is greyed out.
 func _press_button(button: BaseButton) -> bool:
 	if not is_instance_valid(button) or button.disabled or not button.is_visible_in_tree():
 		return false
+	if context() == "battle":
+		# 1.0.2: the button the controller used lights up briefly.
+		flash_control = button
+		flash_left = press_flash_seconds
+		if is_instance_valid(overlay):
+			overlay.queue_redraw()
 	if button.toggle_mode:
 		if button.button_group != null:
 			if not button.button_pressed:
@@ -407,7 +464,11 @@ func _on_joy_connection_changed(device: int, connected: bool) -> void:
 	var name := Input.get_joy_name(device) if connected else ""
 	var line := "controller %s%s" % ["connected" if connected else "disconnected", (" | " + name.substr(0, 40)) if not name.is_empty() else ""]
 	connection_events.append(line)
+	if connection_events.size() > 20:
+		connection_events.remove_at(0)
 	_log(line)
+	if connected:
+		_log("controller details | " + pad_summary(device))
 	if connected:
 		if active_device == -1:
 			active_device = device
@@ -430,6 +491,109 @@ func device_label() -> String:
 			return "NO CONTROLLER CONNECTED"
 		return _pad_label(pads[0])
 	return _pad_label(active_device)
+
+# ------------------------------------------------------------------
+# 1.0.2 connection status and controller check
+# ------------------------------------------------------------------
+## The controller the panel describes: the one in use, else the first connected.
+func shown_device() -> int:
+	var pads := Input.get_connected_joypads()
+	if active_device in pads:
+		return active_device
+	return pads[0] if not pads.is_empty() else -1
+
+## What the Controller panel shows: connected or not, name, compatible, connection.
+func status() -> Dictionary:
+	var pads := Input.get_connected_joypads()
+	var device := shown_device()
+	var out := {"connected": device != -1, "count": pads.size(), "name": "", "compatible": false,
+		"connection": "", "driver": cached_driver_status()}
+	if device != -1:
+		out.name = _pad_label(device)
+		out.compatible = Input.is_joy_known(device)
+		out.connection = connection_type(Input.get_joy_guid(device), Input.get_joy_info(device))
+	return out
+
+## How the controller is attached, read from what Godot reports. On Windows, Xbox
+## controllers usually arrive through XInput, which looks the same for a cable,
+## Bluetooth and the Xbox Wireless Adapter.
+static func connection_type(guid: String, info: Dictionary) -> String:
+	if info.has("steam_input_index"):
+		return "STEAM INPUT"
+	if info.has("xinput_index"):
+		return "XINPUT"
+	var bus := guid.substr(0, 4).to_lower()
+	if bus == "0500":
+		return "BLUETOOTH"
+	if bus == "0300":
+		return "USB"
+	return ""
+
+## driver_status(), read again at most every 10 s (the panel asks twice a second).
+func cached_driver_status() -> String:
+	var now := Time.get_ticks_msec()
+	if _driver_checked_msec < 0 or now - _driver_checked_msec >= DRIVER_RECHECK_MSEC:
+		_driver_cached = driver_status()
+		_driver_checked_msec = now
+	return _driver_cached
+
+## Whether the engine's controller system started: "started", "failed", "no window"
+## (headless runs have no controller system) or "unknown" (log not readable).
+func driver_status() -> String:
+	if DisplayServer.get_name() == "headless":
+		return "no window"
+	var text := FileAccess.get_file_as_string(engine_log_file)
+	if text.contains(DRIVER_FAILED_TEXT):
+		return "failed"
+	if text.is_empty():
+		return "unknown"
+	return "started"
+
+## One line about one controller, for the log and the controller check. No serial
+## numbers or other personal data.
+func pad_summary(device: int) -> String:
+	if not device in Input.get_connected_joypads():
+		return "#%d not connected now" % device
+	var info := Input.get_joy_info(device)
+	var guid := Input.get_joy_guid(device)
+	var connection := connection_type(guid, info)
+	return "#%d %s | %s | connection %s | vendor %s product %s | GUID %s" % [
+		device, Input.get_joy_name(device).substr(0, 60),
+		"compatible" if Input.is_joy_known(device) else "not in the controller list",
+		connection if connection != "" else "unknown",
+		_hex_id(info.get("vendor_id", "")), _hex_id(info.get("product_id", "")), guid]
+
+static func _hex_id(value) -> String:
+	var text := str(value)
+	if text.is_empty() or not text.is_valid_int():
+		return "?"
+	return "%04x" % int(text)
+
+## Plain text the player can copy and send: what the game sees right now.
+func check_report(version_text: String = "") -> String:
+	var lines := PackedStringArray()
+	lines.append("CONTROLLER CHECK%s" % ((" | " + version_text) if version_text != "" else ""))
+	lines.append("System: %s %s | %s | Godot %s" % [OS.get_name(), OS.get_version(), Engine.get_architecture_name(), Engine.get_version_info().string])
+	var driver := driver_status()
+	lines.append("Controller system: %s" % {"started": "started", "failed": "DID NOT START (engine error)", "no window": "not used (no window)", "unknown": "unknown (log not readable)"}.get(driver, driver))
+	var pads := Input.get_connected_joypads()
+	lines.append("Controllers found: %d" % pads.size())
+	for device in pads:
+		lines.append("  " + pad_summary(device))
+	lines.append("Controller events received: %d%s" % [events_seen, (" | last button " + last_button_seen.to_upper()) if last_button_seen != "" else ""])
+	if connection_events.is_empty():
+		lines.append("Connection changes: none")
+	else:
+		lines.append("Connection changes: " + "; ".join(connection_events.slice(-5)))
+	return "\n".join(lines)
+
+## Light up a pressed button in the Controller panel (any screen with it open).
+func _light(id: String, pressed: bool) -> void:
+	if not is_instance_valid(console):
+		return
+	var panel: Control = console.controller_panel
+	if is_instance_valid(panel) and panel.visible:
+		panel.light(id, pressed)
 
 func _pad_label(device: int) -> String:
 	var name := Input.get_joy_name(device).to_upper()
@@ -475,9 +639,10 @@ func current_target() -> Control:
 	return target
 
 func _direction_pressed(dir: Vector2i) -> void:
+	_note_bonus_input()
 	var where := context()
 	match where:
-		"capture":
+		"test":
 			return
 		"initials":
 			if dir == Vector2i.UP:
@@ -570,6 +735,11 @@ func hide_battle_highlight() -> void:
 
 func _process(delta: float) -> void:
 	_update_jump(delta)
+	if flash_left > 0.0:
+		flash_left -= delta
+		if flash_left <= 0.0:
+			flash_control = null
+		overlay.queue_redraw()
 	var where := context()
 	if where != "battle" and battle_highlight_visible:
 		battle_highlight_visible = false
@@ -600,6 +770,18 @@ func _draw_overlay() -> void:
 		var bar := Rect2(r.position + Vector2(8, r.size.y - 9), Vector2((r.size.x - 16) * jump_progress(), 4))
 		overlay.draw_rect(Rect2(bar.position, Vector2(r.size.x - 16, 4)), Color(0.2, 0.08, 0.14, 0.9))
 		overlay.draw_rect(bar, Color(0.7, 0.86, 1.0, 0.95))
+	if flash_left > 0.0 and is_instance_valid(flash_control) and flash_control.is_visible_in_tree() and context() == "battle":
+		var inv_f := overlay.get_global_transform_with_canvas().affine_inverse()
+		var fr := target_rect(flash_control)
+		fr = Rect2(inv_f * fr.position, fr.size / overlay.get_global_transform_with_canvas().get_scale())
+		var strength := clampf(flash_left / maxf(0.01, press_flash_seconds), 0.0, 1.0)
+		var glow := StyleBoxFlat.new()
+		glow.bg_color = Color(highlight_color, 0.28 * strength)
+		glow.border_color = Color(highlight_color, strength)
+		glow.set_border_width_all(4)
+		glow.set_corner_radius_all(10)
+		glow.anti_aliasing = true
+		glow.draw(overlay.get_canvas_item(), fr.grow(5.0))
 	if not highlight_shown():
 		return
 	var control := target if is_instance_valid(target) and target in targets() else null

@@ -109,14 +109,14 @@ func _run() -> void:
 	c.battle_event.connect(func(m: String) -> void: events.append(m))
 
 	# --- Version 1.1.0 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 1.1.1")
-	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text reads STELLAR DEFENSE CONSOLE 1.0.1")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 1.1.1")
+	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.1"
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.1", "Export presets name 1.1.1 files and the Mac version is 1.1.1")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.8"
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8", "Export presets name 1.1.1 files and the Mac version is 1.1.1")
 	check(int(presets.get_value("preset.0.options", "application/export_angle", 0)) == 1, "Windows export still includes the ANGLE files")
 
 	# --- 1. Battle readout: destroyed totals, losses, EMP in EMP blue ---
@@ -194,47 +194,52 @@ func _run() -> void:
 	v1.position = c.launch_origin(v1.lane)
 	v2.position = c.launch_origin(v2.lane) + Vector3(0.0, 1.2, 0.0)
 	c._update_interceptors(0.0)
-	check(c.interceptors_returned == 1 and absf(c.interceptor_recovery_remaining - 3.0) < 0.01 and c.interceptor_ready_in() >= 2.99, "A Interceptor landing holds LAUNCH INTERCEPTORS for 3 s")
+	# 1.0.5: each ship has its own ready timer; a landing never restarts another's wait.
+	check(c.interceptors_returned == 1 and c.interceptor_waits.size() == 1 and absf(c.interceptor_waits[0].left - 3.0) < 0.01, "An Interceptor landing gives that Interceptor a 3 s wait")
 	console._process(0.0)
-	check(console.launch_button.disabled and console.launch_button.text.ends_with("READY IN 3s"), "The button shows its usual not-ready look: %s" % console.launch_button.text.replace("\n", " / "))
-	check(c.launch_interceptors() == 0, "Interceptors cannot launch during the pause")
+	check(not console.launch_button.disabled and c.interceptors_ready() == 4 and console.launch_button.text.ends_with("2 READY"), "The other Interceptors stay ready (1.0.6: the button shows the 2 one press sends): %s" % console.launch_button.text.replace("\n", " / "))
 	run(2.0)
 	v2.position = c.launch_origin(v2.lane)
 	c._update_interceptors(0.0)
-	check(c.interceptors_returned == 2 and absf(c.interceptor_recovery_remaining - 3.0) < 0.01, "Each landing restarts the 3 s (unlocks 3 s after the last Interceptor lands)")
-	run(2.9)
-	check(c.launch_interceptors() == 0, "Still held 2.9 s after the last landing")
-	run(0.15)
-	check(c.launch_interceptors() > 0, "Ready 3 s after the last landing")
-	check(absf(c.interceptor_ready_in() - 4.0) < 0.01, "A launch starts the normal 4 s cooldown")
-	c.launch_cooldown_remaining = 6.0
-	c._hold_after_landing("interceptor")
-	check(absf(c.interceptor_ready_in() - 6.0) < 0.01, "A longer launch cooldown wins")
+	check(c.interceptors_returned == 2 and c.interceptor_waits.size() == 2 and absf(c.interceptor_waits[0].left - 1.0) < 0.06 and absf(c.interceptor_waits[1].left - 3.0) < 0.01, "A second landing does not restart the first one's wait")
+	check(c.interceptors_ready() == 4 and c.launch_interceptors() == 2, "Ready Interceptors launch while the landed ones wait")
+	check(c.interceptors_ready() == 0 and c.interceptor_waits.size() == 4, "The 2 ready ones left behind wait the 4 s launch cooldown")
+	run(1.1)
+	check(c.interceptors_ready() == 1 and c.launch_interceptors() == 1, "The first landed Interceptor is ready 3 s after its own landing and launches alone")
+	run(2.0)
+	check(c.interceptors_ready() == 1 and c.launch_interceptors() == 1, "The second is ready 3 s after its landing; the next press sends it too")
 	clean()
 	var rp: Dictionary = c.find_contact(c._spawn_gunship())
 	rp.phase = "return"
 	rp.position = c.launch_origin(rp.lane)
 	c._update_gunships(0.0)
-	check(c.gunships_returned == 1 and absf(c.gunship_ready_in() - 5.0) < 0.01, "A Gunship landing holds LAUNCH GUNSHIP for 5 s")
+	check(c.gunships_returned == 1 and c.gunship_waits.size() == 1 and absf(c.gunship_waits[0].left - 5.0) < 0.01, "A Gunship landing gives that Gunship a 5 s wait")
+	console._process(0.0)
+	check(not console.gunship_button.disabled and console.gunship_button.text.ends_with("1 READY"), "The other Gunship stays ready: %s" % console.gunship_button.text.replace("\n", " / "))
+	check(c.launch_gunship() == 1 and c.gunships_ready() == 0 and absf(c.gunship_ready_in() - 5.0) < 0.01, "It launches; the landed one is next in 5 s")
 	console._process(0.0)
 	check(console.gunship_button.disabled and console.gunship_button.text.ends_with("READY IN 5s"), "LAUNCH GUNSHIP shows READY IN 5s")
-	check(c.launch_gunship() == 0, "No Gunship during the pause")
 	run(5.05)
-	check(c.launch_gunship() == 1 and absf(c.gunship_ready_in() - 8.0) < 0.01, "Ready after 5 s; a launch starts the 8 s cooldown")
+	check(c.launch_gunship() == 1, "Ready 5 s after its landing")
+	console._process(0.0)
+	check(console.gunship_button.disabled and console.gunship_button.text.ends_with("ALL DEPLOYED"), "Both out: ALL DEPLOYED at once")
 	clean()
-	# Auto Launch obeys the pause.
+	# Auto Launch follows the same per-ship rules.
 	c.auto_launch_interceptors = true
 	var b2 := base()
 	drone_at(b2, Vector3(0.2, 0.3, 0.0))
+	for i in range(5):
+		interceptor_at(Vector3(0.0, 0.9, 0.0)).phase = "return"
 	c._hold_after_landing("interceptor")
+	var auto_before: int = c.auto_interceptor_launches
 	c._update_auto_launch()
-	check(c.count_interceptors() == 0, "Auto Launch Interceptors waits for the landing pause")
+	check(c.count_interceptors() == 5 and c.auto_interceptor_launches == auto_before, "Auto Launch Interceptors waits for the one waiting Interceptor")
 	run(3.1)
-	check(c.count_interceptors() > 0, "Auto Launch Interceptors launches after the pause")
+	check(c.auto_interceptor_launches == auto_before + 1 and c.interceptors_returned == 0, "Auto Launch Interceptors launches it when its own wait ends")
 	clean()
 	c.interceptor_recovery_seconds = 0.0
 	c._hold_after_landing("interceptor")
-	check(c.interceptor_ready_in() == 0.0, "Interceptor Recovery Seconds 0 turns the pause off")
+	check(c.interceptor_ready_in() == 0.0 and c.interceptor_waits.is_empty(), "Interceptor Recovery Seconds 0 turns the pause off")
 	c.interceptor_recovery_seconds = 3.0
 
 	# --- 4. Random nuke speed ---
@@ -292,7 +297,7 @@ func _run() -> void:
 	var b5 := base()
 	nuke_at(b4)
 	c._update_auto_launch()
-	check(c.count_kind("gunship") == 1 and c.gunship_cooldown_remaining > 7.0, "One nuke: one Gunship and the normal cooldown")
+	check(c.count_kind("gunship") == 1 and c.gunships_ready() == 0 and c.gunship_ready_in() > 7.0, "One nuke: one Gunship and the normal cooldown for the other")
 	nuke_at(b5)
 	c._update_auto_launch()
 	check(c.count_kind("gunship") == 2 and c.auto_all_gunship_launches == 1, "Two nukes: every available Gunship launches at once, skipping the cooldown")
@@ -305,7 +310,7 @@ func _run() -> void:
 	nuke_at(b5)
 	events.clear()
 	c._update_auto_launch()
-	check(c.count_kind("gunship") == 2 and c.gunship_cooldown_remaining > 7.0, "Two nukes from a standing start: both Gunships leave together")
+	check(c.count_kind("gunship") == 2 and c.gunships_in_hangar() == 0, "Two nukes from a standing start: both Gunships leave together")
 	check(events.any(func(m: String) -> bool: return m.begins_with("auto launch: all Gunships (2)")), "The all-Gunship launch is logged")
 	clean(1)
 	c.nuclear_weapons_enabled = true
@@ -327,9 +332,9 @@ func _run() -> void:
 	nuke_at(b5)
 	c._hold_after_landing("gunship")
 	c._update_auto_launch()
-	check(c.count_kind("gunship") == 0, "The 5 s landing pause still applies")
+	check(c.count_kind("gunship") == 1 and c.gunship_waits.size() == 1, "1.0.5: every ready Gunship goes; the one in its landing wait stays")
 	run(5.1)
-	check(c.count_kind("gunship") == 2, "After the pause both launch")
+	check(c.count_kind("gunship") == 2, "It follows when its own 5 s ends")
 	clean(1)
 	c.nuclear_weapons_enabled = true
 	b4 = base()

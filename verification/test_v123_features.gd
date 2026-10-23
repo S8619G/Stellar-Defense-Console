@@ -61,8 +61,8 @@ func civilians(c: Control) -> Array:
 	return list
 ## One Interceptor parked on a Attack Drone; returns the number of Interceptor hits until it is destroyed (-1 = Interceptor lost).
 func hits_to_kill(c: Control, drone: Dictionary) -> int:
-	c.launch_cooldown_remaining = 0.0
-	c.interceptor_recovery_remaining = 0.0
+	c.interceptor_waits.clear()
+	c.interceptor_waits.clear()
 	# Interceptors hold a central screen (they ignore Attack Drones high on the scope): meet it low.
 	drone.position = Vector3(clampf(drone.position.x, -0.3, 0.3), -0.1, 0.0)
 	var v: Dictionary = c.find_contact(c._spawn_interceptor("interceptor", false))
@@ -120,13 +120,13 @@ func _run() -> void:
 	c.auto_spawn = true
 
 	# --- Version ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 0.1.2")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text reads STELLAR DEFENSE CONSOLE 1.0.1")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 0.1.2")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.1", "Export presets name 0.1.2 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8", "Export presets name 0.1.2 files")
 
 	# --- Defaults ---
 	check(c.protect_drone_interceptor_hits == 4 and c.protect_drone_hits_step == 1 and c.protect_drone_hits_cap == 6, "Round Attack Drones: 4 Interceptor hits, +1 per set, cap 6")

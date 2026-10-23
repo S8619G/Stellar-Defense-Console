@@ -131,7 +131,7 @@ func _run() -> void:
 	c.nuclear_hit_points = 1  # 1.02: one-hit setting reproduces the original instant interception
 	var n: Dictionary = c.find_contact(c._launch_nuclear(b))
 	for i in range(2):
-		c.gunship_cooldown_remaining = 0.0
+		c.gunship_waits.clear()
 		c.launch_gunship()
 	for ship in c.contacts:
 		if ship.kind == "gunship":

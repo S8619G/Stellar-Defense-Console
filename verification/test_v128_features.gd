@@ -94,14 +94,14 @@ func _run() -> void:
 	c.ship_missiles_target_nukes = false
 
 	# ---------------- Version ----------------
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 0.1.2")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text reads STELLAR DEFENSE CONSOLE 1.0.1")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 0.1.2")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.1"
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.1", "Export presets name 0.1.2 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8"
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.8", "Export presets name 0.1.2 files")
 
 	# ---------------- Splash screen ----------------
 	var splash_path := "res://assets/splash/stellar_defense_console_splash.png"
@@ -308,8 +308,8 @@ func _run() -> void:
 		c._end_protect("drones destroyed" if outcome != "lost" else "all lost")
 		var lines: Array[String] = c.rest_tally_lines()
 		print("V128_RESULT %s lines=%s" % [outcome, lines])
-		var want_title: String = {"saved": "FLEET SAVED", "partial": "%d OF %d SHIPS SAVED" % [total - 1, total], "lost": "FLEET LOST"}[outcome]
-		var want_line := "FLEET HULL %d%%  |  ATTACK DRONES DOWN %d OF %d" % [c.protect_hull_kept, c.protect_drones_destroyed, c.protect_drones_spawned]
+		var want_title: String = {"saved": "SUPPORT FLEET SAVED", "partial": "%d OF %d SHIPS SAVED" % [total - 1, total], "lost": "SUPPORT FLEET LOST"}[outcome]
+		var want_line := "SUPPORT HULL %d%%  |  ATTACK DRONES DOWN %d OF %d" % [c.protect_hull_kept, c.protect_drones_destroyed, c.protect_drones_spawned]
 		check(lines[0] == want_title, "%s: title %s unchanged" % [outcome, want_title])
 		check(lines[1] == want_line, "%s: detail line reads %s" % [outcome, want_line])
 		check(not lines[1].contains("SAVED"), "%s: the ship count is not repeated" % outcome)

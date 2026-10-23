@@ -37,7 +37,7 @@ func base() -> Dictionary:
 	return b
 
 func gunship() -> Dictionary:
-	c.gunship_cooldown_remaining = 0.0
+	c.gunship_waits.clear()
 	c.launch_gunship()
 	var found: Dictionary = {}
 	for ship in c.contacts:
@@ -143,6 +143,9 @@ func _run() -> void:
 	c._update_special_projectiles(0.0)
 	check(c.is_defeated(), "Second nuclear impact can end game")
 	console._process(0.0)
+	# 1.0.8: the score screen comes in front 3 s after the ship is destroyed (SYSTEMS OFFLINE first).
+	console.damage_effects.skip_to_score_screen()
+	console._process(0.0)
 	var panel: Panel = console.get_node("CenterContainer/Dome/GameOverPanel")
 	check(panel.visible and panel.get_node("Title").text == "Game Over" and panel.get_node("Retry").text == "Retry", "Game Over and Retry display in one panel")
 	var style: StyleBoxFlat = panel.get_theme_stylebox("panel")
@@ -155,9 +158,9 @@ func _run() -> void:
 	clean()
 	check(c.launch_gunship() == 1 and c.count_kind("gunship") == 1, "Launch Gunship button path spawns one craft")
 	check(c.launch_gunship() == 0, "Gunship launch cooldown enforced")
-	c.gunship_cooldown_remaining = 0.0
+	c.gunship_waits.clear()
 	check(c.launch_gunship() == 1, "Second Gunship available after cooldown")
-	c.gunship_cooldown_remaining = 0.0
+	c.gunship_waits.clear()
 	check(c.launch_gunship() == 0, "Active Gunship capacity enforced")
 	check(c.gunship_speed < c.interceptor_speed, "Gunship slower than Interceptor")
 	clean()

@@ -109,14 +109,14 @@ func _run() -> void:
 	clean()
 
 	# --- Full build naming ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 1.06")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 1.06")
 	check(not console.test_build, "Test Build is off by default (full build)")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text reads STELLAR DEFENSE CONSOLE 1.06 (no TEST)")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.06 (no TEST)")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.1", "Export presets name 1.06 files (no Test)")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8", "Export presets name 1.06 files (no Test)")
 
 	# --- Hover tooltips off by default ---
 	await frames(2)
@@ -151,9 +151,9 @@ func _run() -> void:
 			row_texts.append((child as Button).text)
 	check(not row_texts.has("DIAGNOSTIC LOG") and not row_texts.has("OPEN LOG FOLDER"), "DIAGNOSTIC LOG row and OPEN LOG FOLDER button removed")
 	check(not ("open_logs_button" in panel), "No OPEN LOG FOLDER button in the panel code")
-	check(panel.PANEL_SIZE == Vector2(860, 922), "Panel is one row shorter (988 to 922 px)")
+	check(panel.PANEL_SIZE == Vector2(860, 988), "Panel is 988 px tall (1.0.8: one row added for SCREEN EFFECTS)")
 	var link: LinkButton = panel.version_label
-	check(link is LinkButton and link.text == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text is a link reading STELLAR DEFENSE CONSOLE 1.06")
+	check(link is LinkButton and link.text == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text is a link reading STELLAR DEFENSE CONSOLE 1.06")
 	var link_rect := Rect2(link.get_global_position() - panel.panel.get_global_position(), link.size)
 	# 1.08: the version text and the "!" icon beside it are centered together.
 	var icon_rect := Rect2(panel.log_icon_button.get_global_position() - panel.panel.get_global_position(), panel.log_icon_button.size)

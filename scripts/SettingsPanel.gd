@@ -21,7 +21,8 @@ const TEXT := Color("#ede0e8")
 const MUTED := Color("#b9a8b2")
 const ACCENT := Color(1.0, 0.6, 0.78)
 const AMBER := Color("#ffe28b")
-const PANEL_SIZE := Vector2(860, 922)
+## 1.0.8: one row taller for SCREEN EFFECTS (922 to 988 px).
+const PANEL_SIZE := Vector2(860, 988)
 ## QUIT asks once more; the confirmation lapses after this many seconds.
 const QUIT_CONFIRM_SECONDS := 3.0
 
@@ -41,6 +42,8 @@ var auto_firewall_button: Button
 var auto_interceptors_button: Button
 var auto_gunships_button: Button
 var auto_jump_button: Button
+## 1.0.8: SCREEN EFFECTS ON/OFF (screen scramble when the ship is hit or destroyed).
+var screen_effects_button: Button
 var auto_repair_button: Button
 var remember_button: Button
 var reset_button: Button
@@ -130,23 +133,27 @@ func _ready() -> void:
 	auto_repair_button = _button("OFF", Vector2(656, 516), Vector2(160, 56), true)
 	_row_text(582, "AUTO JUMP", "Jumps by itself when the hull drops below 10% (usual JUMP cost)", 580)
 	auto_jump_button = _button("OFF", Vector2(656, 582), Vector2(160, 56), true)
-	_row_text(648, "REMEMBER SETTINGS", "OFF: next start uses NORMAL, autos off", 350)
-	reset_button = _button("DEFAULTS", Vector2(488, 648), Vector2(160, 56), false)
+	_row_text(648, "SCREEN EFFECTS", "Screen scramble when a nuke hits or the ship is destroyed", 580)
+	screen_effects_button = _button("ON", Vector2(656, 648), Vector2(160, 56), true)
+	screen_effects_button.name = "ScreenEffectsButton"
+	_tip(screen_effects_button, "OFF: no screen scramble or flicker. The red SYSTEMS OFFLINE screen still shows.")
+	_row_text(714, "REMEMBER SETTINGS", "OFF: next start uses NORMAL, autos off", 350)
+	reset_button = _button("DEFAULTS", Vector2(488, 714), Vector2(160, 56), false)
 	_tip(reset_button, "Put every setting back to its default (press twice to confirm). High scores are not affected.")
-	remember_button = _button("ON", Vector2(656, 648), Vector2(160, 56), true)
-	_divider(718)
-	multiplier_label = _label("", Vector2(44, 732), Vector2(500, 34), 24, ACCENT)
-	multiplier_detail = _label("", Vector2(44, 766), Vector2(780, 24), 16, MUTED)
-	note_label = _label("", Vector2(44, 794), Vector2(780, 24), 16, AMBER)
-	quit_button = _button("QUIT", Vector2(44, 828), Vector2(200, 56), false)
+	remember_button = _button("ON", Vector2(656, 714), Vector2(160, 56), true)
+	_divider(784)
+	multiplier_label = _label("", Vector2(44, 798), Vector2(500, 34), 24, ACCENT)
+	multiplier_detail = _label("", Vector2(44, 832), Vector2(780, 24), 16, MUTED)
+	note_label = _label("", Vector2(44, 860), Vector2(780, 24), 16, AMBER)
+	quit_button = _button("QUIT", Vector2(44, 894), Vector2(200, 56), false)
 	_tip(quit_button, "Close Stellar Defense Console (press twice to confirm)")
-	new_battle_button = _button("NEW BATTLE", Vector2(400, 828), Vector2(220, 56), false)
-	close_button = _button("CLOSE", Vector2(656, 828), Vector2(160, 56), false)
+	new_battle_button = _button("NEW BATTLE", Vector2(400, 894), Vector2(220, 56), false)
+	close_button = _button("CLOSE", Vector2(656, 894), Vector2(160, 56), false)
 	# Version text, centered at the bottom; a quiet link to the GitHub page (1.08).
 	var version_row := HBoxContainer.new()
 	version_row.name = "VersionRow"
 	version_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	version_row.position = Vector2(44, 892)
+	version_row.position = Vector2(44, 958)
 	version_row.size = Vector2(PANEL_SIZE.x - 88, 22)
 	version_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	panel.add_child(version_row)
@@ -178,6 +185,7 @@ func _ready() -> void:
 	auto_jump_button.toggled.connect(_on_toggle.bind("auto_jump"))
 	auto_repair_button.toggled.connect(_on_toggle.bind("auto_repair"))
 	remember_button.toggled.connect(_on_toggle.bind("remember_settings"))
+	screen_effects_button.toggled.connect(_on_toggle.bind("screen_effects"))
 	reset_button.pressed.connect(_on_reset_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
 	version_label.pressed.connect(func() -> void: open_github_requested.emit())
@@ -227,6 +235,8 @@ func refresh() -> void:
 	auto_repair_button.text = "ON" if settings.auto_repair else "OFF"
 	remember_button.set_pressed_no_signal(settings.remember_settings)
 	remember_button.text = "ON" if settings.remember_settings else "OFF"
+	screen_effects_button.set_pressed_no_signal(settings.screen_effects)
+	screen_effects_button.text = "ON" if settings.screen_effects else "OFF"
 	reset_button.text = "CONFIRM" if reset_armed else "DEFAULTS"
 	quit_button.text = "CONFIRM QUIT" if quit_armed else "QUIT"
 	var autos := int(settings.auto_battery) + int(settings.auto_firewall) + int(settings.auto_interceptors) + int(settings.auto_gunships) + int(settings.auto_jump) + int(settings.auto_repair)

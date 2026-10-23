@@ -226,7 +226,7 @@ func _run() -> void:
 	c.auto_jump = false
 	await process_frame
 	var jump_button: Button = console.get_node("BottomButtons/Jump")
-	check(jump_button != null and jump_button.disabled and jump_button.text.contains("HELD | PROTECT THE FLEET"), "JUMP button shows HELD | PROTECT THE FLEET")
+	check(jump_button != null and jump_button.disabled and jump_button.text.contains("HELD | PROTECT THE CONVOY"), "JUMP button shows HELD | PROTECT THE CONVOY")
 
 	# ---------------- Auto Launch Interceptors in the round ----------------
 	start_protect(c, 1, 11)
@@ -269,7 +269,7 @@ func _run() -> void:
 		var lines: Array[String] = c.rest_tally_lines()
 		print("V127_RESULT %s lines=%s rest=%.1f" % [outcome, lines, c.wave_rest_remaining])
 		check(c.protect_outcome() == outcome, "%s: outcome detected" % outcome)
-		var want_title: String = {"saved": "FLEET SAVED", "partial": "%d OF %d SHIPS SAVED" % [total - 1, total], "lost": "FLEET LOST"}[outcome]
+		var want_title: String = {"saved": "SUPPORT FLEET SAVED", "partial": "%d OF %d SHIPS SAVED" % [total - 1, total], "lost": "SUPPORT FLEET LOST"}[outcome]
 		check(lines[0] == want_title, "%s: title %s" % [outcome, want_title])
 		check(c.last_protect_result_sound == outcome and c.protect_result_sound_count == sounds_before + 1, "%s: its own sound plays once" % outcome)
 		check(absf(c.wave_rest_remaining - (c.rest_seconds() + 5.0)) < 0.01, "%s: the result stays up 5 s longer (%.1f s on Normal)" % [outcome, c.wave_rest_remaining])
@@ -281,7 +281,7 @@ func _run() -> void:
 			check(lines[2].begins_with("+") and int(rows2[2][1]) == 40, "%s: the bonus is a large 40 px line (%s)" % [outcome, lines[2]])
 			check(rows2[2][2].r > 0.9 and rows2[2][2].g > 0.8 and rows2[2][2].b < 0.7, "%s: the bonus is yellow" % outcome)
 		else:
-			check(lines[2] == "NO FLEET BONUS" and int(rows2[2][1]) < 40, "lost: a quiet NO FLEET BONUS line")
+			check(lines[2] == "NO CONVOY BONUS" and int(rows2[2][1]) < 40, "lost: a quiet NO CONVOY BONUS line")
 		check(lines[lines.size() - 1].begins_with("NEXT"), "%s: the NEXT line is kept" % outcome)
 		# Panel inside the scope.
 		var r: Rect2 = c.protect_result_rect(rows2)
@@ -293,7 +293,7 @@ func _run() -> void:
 				inside = false
 		check(inside, "%s: the result panel stays inside the scope" % outcome)
 	# Saved partial colour: green; lost: red.
-	check(c.protect_result_rows(c.rest_tally_lines())[0][2].r > 0.9, "FLEET LOST title is red")
+	check(c.protect_result_rows(c.rest_tally_lines())[0][2].r > 0.9, "SUPPORT FLEET LOST title is red")
 	# Flash: twice a second for 3 s, then steady.
 	c.protect_result_started = c.battle_time
 	var toggles := 0

@@ -13,6 +13,8 @@ const ICONS := {
 	"siege_ship": preload("res://assets/icons/siege.png"),
 	"carrier": preload("res://assets/icons/carrier.png"),
 	"breacher": preload("res://assets/icons/breacher.png"),
+	# 1.0.7: the Protect the convoy Breacher uses the Breacher mark.
+	"convoy_breacher": preload("res://assets/icons/breacher.png"),
 	"drone": preload("res://assets/icons/drone.png"),
 	"drone_squadron": preload("res://assets/icons/drone-squadron.png"),
 	"aegis": preload("res://assets/ship_outline.png"),

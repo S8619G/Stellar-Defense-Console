@@ -129,6 +129,9 @@ func _run() -> void:
 	check(c.hull == 0.0, "No repair siege after game over")
 	check(not c.request_jump() and c.launch_interceptors() == 0, "Defeat disables jump and Interceptor launch")
 	console._process(0.0)
+	# 1.0.8: the score screen comes in front 3 s after the ship is destroyed (SYSTEMS OFFLINE first).
+	console.damage_effects.skip_to_score_screen()
+	console._process(0.0)
 	check(console.get_node("CenterContainer/Dome/GameOverPanel").visible, "Game over exposes mouse-only restart")
 	console.get_node("CenterContainer/Dome/GameOverPanel/Retry").pressed.emit()
 	check(c.hull_percent() == 100 and c.jump_percent() == 100, "Restart restores full HULL and JUMP")

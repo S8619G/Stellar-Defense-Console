@@ -22,10 +22,13 @@ func hack_text_height() -> float:
 const HighScores = preload("res://scripts/HighScores.gd")
 const GameSettings = preload("res://scripts/GameSettings.gd")
 const SettingsPanel = preload("res://scripts/SettingsPanel.gd")
+## 1.0.7: test start screen for the Convoy Test build only.
+const ConvoyTestPicker = preload("res://scripts/ConvoyTestPicker.gd")
 const BonusPickPanel = preload("res://scripts/BonusPickPanel.gd")
 const SessionLog = preload("res://scripts/SessionLog.gd")
 const ControllerInput = preload("res://scripts/ControllerInput.gd")
 const ControllerPanel = preload("res://scripts/ControllerPanel.gd")
+const DamageEffects = preload("res://scripts/DamageEffects.gd")
 
 @export_group("Audio Mix")
 @export_range(-40.0, 0.0) var sweep_volume_db: float = -20.0
@@ -69,8 +72,9 @@ const ControllerPanel = preload("res://scripts/ControllerPanel.gd")
 
 @export_group("Missile Bonus Pick")
 ## 0.1.2: when both missile bonuses are earned the battle pauses and the player picks
-## one. With no pick in this many seconds the current bonus is kept.
-@export_range(3.0, 60.0) var bonus_pick_seconds: float = 10.0
+## one. With no pick in this many seconds the current bonus is kept. 1.0.5: 20 s, and the
+## countdown stops once the player moves the mouse, presses an arrow key or uses a controller.
+@export_range(3.0, 60.0) var bonus_pick_seconds: float = 20.0
 ## Small tag over the other choice when the pick is offered again after a set.
 @export var bonus_pick_set_tag: String = "YOU CAN SWITCH TO"
 
@@ -84,6 +88,8 @@ const ControllerPanel = preload("res://scripts/ControllerPanel.gd")
 @export_range(0.5, 30.0) var log_stall_seconds: float = 2.0
 ## How many session files to keep (oldest are deleted).
 @export_range(1, 50) var log_keep_files: int = 10
+## 1.0.2: the controller check is written again this many seconds after start.
+@export_range(1.0, 30.0) var controller_check_delay: float = 3.0
 
 ## 1.08: the Settings version text opens this page.
 @export var github_url: String = ""
@@ -108,6 +114,11 @@ const ControllerPanel = preload("res://scripts/ControllerPanel.gd")
 
 var shown_score: float = 0.0
 var was_defeated: bool = false
+## 1.0.8: damage effects (nuke-hit scramble, red SYSTEMS OFFLINE screen).
+var damage_effects: DamageEffects
+## 1.0.8: true from the ship being destroyed until Retry / New Battle.
+var sweep_stopped: bool = false
+var _sweep_fade_left: float = 0.0
 var entry_active: bool = false
 var entry_letters: Array[int] = [0, 0, 0]
 var entry_slot: int = 0
@@ -189,6 +200,12 @@ func _ready() -> void:
 	_build_controller()
 	# Only when this console is the running game (not inside a test script).
 	call_deferred("_fit_window_on_start")
+	# 1.0.7: the Protect the convoy test start screen, only in the Convoy Test build.
+	if ConvoyTestPicker.wanted():
+		var picker := ConvoyTestPicker.new()
+		picker.z_index = 2
+		add_child(picker)
+		picker.call_deferred("setup", self, contacts)
 
 # ------------------------------------------------------------------
 # Settings (gear icon, top right): volumes, mutes, difficulty, auto options.
@@ -206,6 +223,13 @@ func _build_settings() -> void:
 			player.bus = GameSettings.EFFECTS_BUS
 	if not get_tree().node_added.is_connected(_on_node_added):
 		get_tree().node_added.connect(_on_node_added)
+	# 1.0.8: damage effects over the inner console (nuke-hit scramble, SYSTEMS OFFLINE).
+	# Drawn after all the console's own content; the score screen and pop-ups draw above it.
+	damage_effects = DamageEffects.new()
+	add_child(damage_effects)
+	move_child(damage_effects, tuning_panel.get_index())
+	contacts.nuke_hit_ship.connect(_on_nuke_hit_ship)
+	game_over_panel.z_index = 1
 	_apply_settings()
 	contacts.active_difficulty = contacts.difficulty  # first battle uses the saved choice
 	# Brief warm flash over the console when a nuke explodes (strength set on Contacts).
@@ -258,6 +282,9 @@ func _build_settings() -> void:
 	controller_panel.close_requested.connect(close_controller_panel)
 	settings_panel.controller_requested.connect(open_controller_panel)
 	contacts.missile_bonus_offer.connect(open_bonus_pick)
+	# 1.0.8: pop-ups stay above the score screen (which is above the damage effects).
+	for popup in [gear_button, settings_panel, bonus_pick_panel, controller_panel, tuning_panel]:
+		(popup as CanvasItem).z_index = 2
 	# One line in Godot's log file per start, to help match a log to a build.
 	print("[RADAR] Stellar Defense Console %s | %s | difficulty %s | auto options %d | remember settings %s" % [
 		ProjectSettings.get_setting("application/config/version", "?"), OS.get_name(),
@@ -352,6 +379,8 @@ func _apply_settings() -> void:
 	contacts.auto_launch_gunships = settings.auto_gunships
 	contacts.auto_jump = settings.auto_jump
 	contacts.auto_rapid_repair = settings.auto_repair
+	if damage_effects:
+		damage_effects.set_screen_effects(settings.screen_effects)
 
 func _on_settings_changed(new_settings: Dictionary) -> void:
 	var old_difficulty: int = settings.difficulty
@@ -394,6 +423,13 @@ func close_settings() -> void:
 # ------------------------------------------------------------------
 # 1.0.0 controller support
 # ------------------------------------------------------------------
+## 1.0.2: writes the controller check to the session log, one line each.
+func log_controller_check(when: String) -> void:
+	if not is_instance_valid(controller) or not is_instance_valid(session_log):
+		return
+	for line in controller.check_report().split("\n"):
+		session_log.write("CONTROLLER", "%s | %s" % [when, line.strip_edges()])
+
 func _build_controller() -> void:
 	controller = ControllerInput.new()
 	controller.name = "ControllerInput"
@@ -402,6 +438,11 @@ func _build_controller() -> void:
 	controller.load_saved()
 	# Added last, so its highlight draws above Settings and the other panels.
 	add_child(controller)
+	# 1.0.2: what the game sees of controllers, at start and again a few seconds later
+	# (some controllers report in a moment after the window opens).
+	log_controller_check("start")
+	if is_inside_tree():
+		get_tree().create_timer(controller_check_delay, true).timeout.connect(log_controller_check.bind("after %.0f s" % controller_check_delay))
 
 ## Settings > CONTROLLER (Settings stays open beneath it; the battle stays paused).
 func open_controller_panel() -> void:
@@ -409,6 +450,7 @@ func open_controller_panel() -> void:
 		return
 	controller_panel.device_text = controller.device_label()
 	controller_panel.playstation_names = controller.uses_playstation_names()
+	controller_panel.controller_input = controller
 	controller_panel.open(controller.bindings)
 	log_event("controller panel opened")
 
@@ -431,6 +473,8 @@ func _on_controller_connection() -> void:
 	if is_instance_valid(controller_panel) and controller_panel.visible:
 		controller_panel.device_text = controller.device_label()
 		controller_panel.playstation_names = controller.uses_playstation_names()
+		controller_panel.controller_input = controller
+		controller_panel.update_status()
 		controller_panel.refresh()
 
 ## 0.1.2: pause the battle and ask which missile bonus to keep.
@@ -464,6 +508,7 @@ func _drop_bonus_pick() -> void:
 	bonus_pick_open = false
 	bonus_pick_panel.visible = false
 	bonus_pick_panel.set_process(false)
+	bonus_pick_panel.set_process_input(false)
 	contacts.set_process(_bonus_pick_were_processing)
 	_pause_effects(false)
 
@@ -568,22 +613,29 @@ func _center_title() -> void:
 	title.offset_left = sub.offset_left
 	title.offset_right = sub.offset_left + width
 
+## 1.0.5: second line of a launch button: ALL DEPLOYED when every ship is out, "2 READY"
+## when ships can launch, otherwise the countdown for the next ship. 1.0.6: "ready" is
+## how many the next press sends (up to 2 Interceptors, 1 Gunship), not the whole hangar.
+static func launch_state_text(in_hangar: int, ready: int, ready_in: float) -> String:
+	if in_hangar <= 0:
+		return "ALL DEPLOYED"
+	if ready > 0:
+		return "%d READY" % ready
+	return "READY IN %ds" % maxi(1, ceili(ready_in))
+
 func _process(delta: float) -> void:
-	sweep_loop.volume_db = sweep_volume_db
+	_update_sweep_sound(delta)
 	if bonus_pick_open and not contacts.missile_bonus_offer_open:
 		_drop_bonus_pick()
 	_update_score_display(delta)
-	var cooling: bool = contacts.interceptor_ready_in() > 0.0
-	var full: bool = contacts.count_interceptors() >= contacts.interceptor_limit()
-	launch_button.disabled = cooling or full or contacts.is_defeated() or contacts.safe_remaining > 0.0
+	# 1.0.5: ALL DEPLOYED first (no countdown when nothing can launch), then the number
+	# ready, then the countdown for the next one coming back.
+	var interceptors_home: int = contacts.interceptors_in_hangar()
+	var interceptors_ready: int = contacts.interceptors_ready()
+	launch_button.disabled = interceptors_ready <= 0 or contacts.is_defeated() or contacts.safe_remaining > 0.0
 	var interceptor_tag := "AUTO " if contacts.auto_launch_interceptors else ""
-	if cooling:
-		launch_button.text = "LAUNCH INTERCEPTORS\n%sREADY IN %ds" % [interceptor_tag, ceili(contacts.interceptor_ready_in())]
-	elif full:
-		launch_button.text = "LAUNCH INTERCEPTORS\n%sALL DEPLOYED" % interceptor_tag
-	else:
-		launch_button.text = "LAUNCH INTERCEPTORS\n%s2 PER LAUNCH" % interceptor_tag
-	_tip(launch_button, "Launch interceptors from below. Active: %d / %d" % [contacts.count_interceptors(), contacts.interceptor_limit()])
+	launch_button.text = "LAUNCH INTERCEPTORS\n%s%s" % [interceptor_tag, launch_state_text(interceptors_home, contacts.interceptors_next_launch(), contacts.interceptor_ready_in())]
+	_tip(launch_button, "Each press launches up to %d Interceptors. Ready in the hangar: %d | Out: %d / %d" % [contacts.interceptors_per_launch, interceptors_ready, contacts.count_interceptors(), contacts.interceptor_limit()])
 	jump_button.disabled = not contacts.can_jump()
 	var jump_tag := "AUTO " if contacts.auto_jump else ""
 	if contacts.jump_offline:
@@ -591,7 +643,7 @@ func _process(delta: float) -> void:
 	else:
 		jump_button.text = ("JUMP\n%s-%d POINTS" % [jump_tag, contacts.jump_score_cost]) if contacts.jump_recharge_remaining <= 0.0 else "JUMP\n%sCHARGING %ds" % [jump_tag, ceili(contacts.jump_recharge_remaining)]
 	if contacts.protect_active():
-		jump_button.text = "JUMP\nHELD | PROTECT THE FLEET"
+		jump_button.text = "JUMP\nHELD | PROTECT THE CONVOY"
 	_tip(jump_button, "Escape for %d points (score cannot go below zero). Damage and remaining defense reserve are retained." % contacts.jump_score_cost)
 	prox_button.disabled = not contacts.can_fire_battery()
 	prox_button.set_pressed_no_signal(contacts.prox_active)
@@ -620,13 +672,10 @@ func _process(delta: float) -> void:
 		firewall_button.text = "FIREWALL\n%sSTANDBY" % wall_tag
 	_tip(firewall_button, "Slows a Breacher hack while deployed. Usable once a Breacher starts hacking; used up in %d seconds, recharges in %d." % [int(contacts.firewall_seconds), int(contacts.firewall_recharge_seconds)])
 	_update_emp_split(shield)
-	gunship_button.disabled = contacts.is_defeated() or contacts.safe_remaining > 0.0 or contacts.gunship_ready_in() > 0.0 or contacts.count_kind("gunship") >= contacts.gunship_limit()
+	var gunships_ready: int = contacts.gunships_ready()
+	gunship_button.disabled = contacts.is_defeated() or contacts.safe_remaining > 0.0 or gunships_ready <= 0
 	var gunship_tag := "AUTO " if contacts.auto_launch_gunships else ""
-	gunship_button.text = "LAUNCH GUNSHIP\n%s1 PER LAUNCH" % gunship_tag
-	if contacts.count_kind("gunship") >= contacts.gunship_limit():
-		gunship_button.text = "LAUNCH GUNSHIP\n%sALL DEPLOYED" % gunship_tag
-	elif contacts.gunship_ready_in() > 0.0:
-		gunship_button.text = "LAUNCH GUNSHIP\n%sREADY IN %ds" % [gunship_tag, ceili(contacts.gunship_ready_in())]
+	gunship_button.text = "LAUNCH GUNSHIP\n%s%s" % [gunship_tag, launch_state_text(contacts.gunships_in_hangar(), contacts.gunships_next_launch(), contacts.gunship_ready_in())]
 	if contacts.protect_active():
 		gunship_button.text = "LAUNCH GUNSHIP\nOFF | INTERCEPTORS ONLY"
 	_tip(gunship_button, "Launch one Gunship. Prioritizes nukes, then Breachers, then attacks Enemy Carriers with light missiles.")
@@ -677,10 +726,17 @@ func _process(delta: float) -> void:
 	var defeated: bool = contacts.is_defeated()
 	if defeated and not was_defeated:
 		begin_game_over()
+		# 1.0.8: radar sound stops; heavy scramble, then the red SYSTEMS OFFLINE screen.
+		damage_effects.ship_destroyed()
+		_stop_sweep_sound()
+		log_event("ship destroyed | systems offline screen%s" % ("" if damage_effects.screen_effects_enabled else " (screen effects off)"))
 	elif not defeated and was_defeated:
 		entry_active = false
+		damage_effects.reset()
+		_restart_sweep_sound()
 	was_defeated = defeated
-	game_over_panel.visible = defeated
+	# 1.0.8: the score screen comes in front 2 s after the red screen shows.
+	game_over_panel.visible = defeated and damage_effects.score_screen_ready()
 	$CenterContainer/Dome/GameOverPanel/FinalScore.text = "FINAL SCORE  %d" % contacts.score
 	if defeated:
 		_refresh_high_score_panel()
@@ -754,8 +810,41 @@ func _ensure_audio_loops() -> void:
 		sweep_loop.finished.connect(_on_sweep_finished)
 
 func _on_sweep_finished() -> void:
-	if sweep_loop:
+	if sweep_loop and not sweep_stopped:
 		sweep_loop.play()
+
+# ------------------------------------------------------------------
+# 1.0.8: damage effects and the radar sound stopping
+# ------------------------------------------------------------------
+## Radar sweep loop fades out over this many seconds when the ship is destroyed (no click).
+const SWEEP_STOP_FADE := 0.03
+
+func _on_nuke_hit_ship(full: bool) -> void:
+	damage_effects.nuke_hit(full)
+
+func _stop_sweep_sound() -> void:
+	sweep_stopped = true
+	_sweep_fade_left = SWEEP_STOP_FADE
+
+func _restart_sweep_sound() -> void:
+	sweep_stopped = false
+	_sweep_fade_left = 0.0
+	sweep_loop.volume_db = sweep_volume_db
+	if sweep_loop.stream != null:
+		sweep_loop.play()
+
+func _update_sweep_sound(delta: float) -> void:
+	if not sweep_stopped:
+		sweep_loop.volume_db = sweep_volume_db
+		return
+	if not sweep_loop.playing:
+		return
+	_sweep_fade_left -= delta
+	if _sweep_fade_left <= 0.0:
+		sweep_loop.stop()
+		sweep_loop.volume_db = sweep_volume_db
+		return
+	sweep_loop.volume_db = sweep_volume_db + linear_to_db(maxf(0.001, _sweep_fade_left / SWEEP_STOP_FADE))
 
 # Exported games (.exe / .app) hold Godot's imported copy of each sound, not the
 # raw .wav file. The .import settings keep it uncompressed 16-bit PCM, so the
@@ -835,7 +924,7 @@ func _input(event: InputEvent) -> void:
 			toggle_fullscreen()
 			get_viewport().set_input_as_handled()
 			return
-	if entry_active and not settings_open and event is InputEventKey and event.pressed:
+	if entry_active and game_over_panel.visible and not settings_open and event is InputEventKey and event.pressed:
 		if _handle_entry_key(event):
 			get_viewport().set_input_as_handled()
 

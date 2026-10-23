@@ -88,22 +88,23 @@ func all_buttons(node: Node, out: Array) -> void:
 
 func _run() -> void:
 	# ---- Version and export presets ----
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 0.1.2")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 0.1.2")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
 	check(presets.get_value("preset.0", "name") == "Windows Desktop" and presets.get_value("preset.0.options", "binary_format/architecture") == "x86_64"
-		and str(presets.get_value("preset.0", "export_path")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe"), "Windows x64 preset")
+		and str(presets.get_value("preset.0", "export_path")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe"), "Windows x64 preset")
 	check(presets.get_value("preset.2", "name") == "Windows Desktop ARM64" and presets.get_value("preset.2.options", "binary_format/architecture") == "arm64"
-		and str(presets.get_value("preset.2", "export_path")).ends_with("Stellar_Defense_Console_1.0.1_Windows_arm64.exe"), "Windows ARM64 preset")
+		and str(presets.get_value("preset.2", "export_path")).ends_with("Stellar_Defense_Console_1.0.8_Windows_arm64.exe"), "Windows ARM64 preset")
 	check(presets.get_value("preset.1", "platform") == "macOS" and presets.get_value("preset.1.options", "binary_format/architecture") == "universal"
-		and str(presets.get_value("preset.1", "export_path")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version") == "1.0.1", "Mac universal preset (Intel and M-series)")
-	check(presets.get_value("preset.0.options", "application/file_version") == "1.0.1.0" and presets.get_value("preset.2.options", "application/file_version") == "1.0.1.0", "Windows file versions follow the project version (as 1.2.9)")
+		and str(presets.get_value("preset.1", "export_path")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version") == "1.0.8", "Mac universal preset (Intel and M-series)")
+	check(presets.get_value("preset.0.options", "application/file_version") == "1.0.8" and presets.get_value("preset.2.options", "application/file_version") == "1.0.8", "Windows file versions follow the project version (as 1.2.9)")
 
 	# ---- Script defaults (1.2.9 behaviour) and the scene's 0.1.2 values ----
 	var plain: Control = load("res://scripts/RadarContacts.gd").new()
-	for key in ["ship_missiles_spread_carriers", "double_missile_quick_pair", "carrier_second_nuke", "rapid_missile_bonus", "rapid_repair_needs_shown_damage", "missile_bonus_pick_after_wave"]:
+	for key in ["ship_missiles_spread_carriers", "double_missile_quick_pair", "carrier_second_nuke", "rapid_missile_bonus", "rapid_repair_needs_shown_damage"]:
 		check(plain.get(key) == false, "Script default off (1.2.9): " + key)
+	check(plain.missile_bonus_pick_after_wave == true, "1.0.6: script default on: missile_bonus_pick_after_wave (pick waits for the end of the round)")
 	check(is_equal_approx(plain.protect_hard_interceptor_share, 0.5) and plain.protect_hard_fewer_on_top == false and is_equal_approx(plain.protect_hard_gunship_patch, 0.25), "Hard Protect defaults: share 0.5, Fewer Interceptors off, 25% patch")
 	check(is_equal_approx(plain.protect_fleet_spread, 1.6), "Fleet spread 1.6 on every difficulty")
 	check(is_equal_approx(plain.protect_hard_gunship_chance, 1.0) and is_equal_approx(plain.protect_gunship_chance, 0.5), "Repair Tender: every eligible round on Hard, half on Normal/Easy")
@@ -125,7 +126,7 @@ func _run() -> void:
 	c.set_process(false)
 	for key in ["ship_missiles_spread_carriers", "double_missile_quick_pair", "carrier_second_nuke", "rapid_missile_bonus", "rapid_repair_needs_shown_damage", "missile_bonus_pick_after_wave"]:
 		check(c.get(key) == true, "Scene turns on: " + key)
-	check(is_equal_approx(console.bonus_pick_seconds, 10.0), "Pick prompt timeout 10 s (Inspector)")
+	check(is_equal_approx(console.bonus_pick_seconds, 20.0), "1.0.5: pick prompt timeout 20 s (Inspector)")
 	var scene_text := FileAccess.get_file_as_string("res://scenes/RadarConsole.tscn")
 	check(not scene_text.contains("test_pick_double") and not scene_text.contains("protect_normal_") and not scene_text.contains("protect_hard_") and not scene_text.contains("protect_fleet_spread"), "Scene carries no prototype or Protect overrides")
 
@@ -264,8 +265,8 @@ func _run() -> void:
 	check(panel.message_label.text == "You just earned DOUBLE MISSILE. You can only have one missile bonus.", "Prompt message matches the mockup")
 	check(panel.card_tags[0].text == "YOU HAVE NOW" and panel.card_titles[0].text == "RAPID MISSILE" and panel.card_effects[0].text == "Fires 1 missile\nevery 6 seconds", "Current card matches the mockup")
 	check(panel.card_tags[1].text == "JUST EARNED" and panel.card_titles[1].text == "DOUBLE MISSILE" and panel.card_effects[1].text == "Fires a pair of missiles\nevery 8 seconds", "Just-earned card matches the mockup")
-	check(panel.timeout_label.text == "No pick in 10 s: you keep RAPID MISSILE", "Timeout line matches the mockup")
-	check(panel.keep_button.text == "KEEP RAPID" and panel.take_button.text == "TAKE DOUBLE", "Buttons KEEP RAPID / TAKE DOUBLE")
+	check(panel.timeout_label.text == "No pick in 20 s: you keep RAPID MISSILE", "Timeout line: 20 s countdown")
+	check(panel.get("keep_button") == null and panel.get("take_button") == null and panel.cards.size() == 2 and panel.cards[0] is Button and panel.highlighted == 0, "1.0.5: no KEEP / TAKE buttons; the two cards are the buttons, current one highlighted")
 	var buttons := []
 	all_buttons(console, buttons)
 	var swap_found := false
@@ -275,10 +276,10 @@ func _run() -> void:
 	check(not swap_found, "No swap button anywhere")
 	console.toggle_settings()
 	check(not console.settings_open, "Settings cannot open over the prompt")
-	panel._process(9.9)
-	check(console.bonus_pick_open, "Prompt still open at 9.9 s")
+	panel._process(19.9)
+	check(console.bonus_pick_open, "Prompt still open at 19.9 s")
 	panel._process(0.2)
-	check(not console.bonus_pick_open and not panel.visible and c.is_processing(), "Prompt closes after 10 s and the battle resumes")
+	check(not console.bonus_pick_open and not panel.visible and c.is_processing(), "Prompt closes after 20 s and the battle resumes")
 	check(c.missile_bonus_pick == "RAPID" and c.rapid_missile_active() and not c.double_missile_active(), "No pick in time keeps Rapid Missile")
 	check(c.status_message == "RAPID MISSILE BONUS ACTIVE", "Status shows the kept bonus")
 	# After a set: offered again.
@@ -286,14 +287,14 @@ func _run() -> void:
 	c._clear_wave()
 	check(console.bonus_pick_open and c.missile_bonus_set_offers == 1, "Offered again after a set of five waves")
 	check(panel.message_label.text == "Set complete: keep your missile bonus or switch." and panel.card_tags[1].text == "YOU CAN SWITCH TO", "After-set wording")
-	panel.take_button.pressed.emit()
-	check(not console.bonus_pick_open and c.missile_bonus_pick == "DOUBLE" and c.double_missile_active() and not c.rapid_missile_active(), "TAKE DOUBLE switches the bonus")
+	panel.cards[1].pressed.emit()
+	check(not console.bonus_pick_open and c.missile_bonus_pick == "DOUBLE" and c.double_missile_active() and not c.rapid_missile_active(), "Clicking the DOUBLE card switches the bonus")
 	check(c.missiles_per_volley() == 2 and is_equal_approx(c.ship_missile_gap(), 8.0), "Double Missile: a pair every 8 s")
 	c.wave = 10
 	c._clear_wave()
-	check(console.bonus_pick_open and panel.keep_button.text == "KEEP DOUBLE" and panel.take_button.text == "TAKE RAPID" and panel.card_titles[0].text == "DOUBLE MISSILE", "Next set offers the other way round")
-	panel.keep_button.pressed.emit()
-	check(c.missile_bonus_pick == "DOUBLE" and c.missile_bonus_switches == 1, "KEEP DOUBLE keeps it")
+	check(console.bonus_pick_open and panel.card_titles[0].text == "DOUBLE MISSILE" and panel.card_titles[1].text == "RAPID MISSILE", "Next set offers the other way round")
+	panel.cards[0].pressed.emit()
+	check(c.missile_bonus_pick == "DOUBLE" and c.missile_bonus_switches == 1, "Clicking the current card keeps it")
 	c.wave = 12
 	c._clear_wave()
 	check(not console.bonus_pick_open, "No offer after a wave that ends no set")
@@ -308,8 +309,8 @@ func _run() -> void:
 	earn(20000)
 	check(c.double_missile_active() and not console.bonus_pick_open, "Hard: Double Missile first, no prompt")
 	earn(5000)
-	check(console.bonus_pick_open and panel.message_label.text == "You just earned RAPID MISSILE. You can only have one missile bonus." and panel.keep_button.text == "KEEP DOUBLE" and panel.card_effects[1].text == "Fires 1 missile\nevery 5 seconds", "Rapid earned second: KEEP DOUBLE / TAKE RAPID, every 5 s on Hard")
-	panel.take_button.pressed.emit()
+	check(console.bonus_pick_open and panel.message_label.text == "You just earned RAPID MISSILE. You can only have one missile bonus." and panel.card_titles[0].text == "DOUBLE MISSILE" and panel.card_effects[1].text == "Fires 1 missile\nevery 5 seconds", "Rapid earned second: DOUBLE card first, RAPID card second, every 5 s on Hard")
+	panel.cards[1].pressed.emit()
 	check(c.rapid_missile_active() and not c.double_missile_active(), "TAKE RAPID")
 	c.hard_rapid_missile_points = 6000
 	# Earned mid-fight: the pick waits for the end of the wave.
@@ -322,10 +323,10 @@ func _run() -> void:
 	earn(17500)
 	check(not console.bonus_pick_open and not c.missile_bonus_offer_open and c.missile_bonus_offer_waiting, "Mid-wave: no prompt, pick held for the end of the wave")
 	check(c.rapid_missile_active() and not c.double_missile_active() and c.is_processing(), "Mid-wave: battle keeps running with Rapid Missile")
-	check(c.status_message == "RAPID MISSILE BONUS EARNED | PICK AFTER THIS WAVE", "Mid-wave status line")
+	check(c.status_message == "DOUBLE MISSILE EARNED | PICK YOUR BONUS AFTER THIS ROUND", "1.0.6: mid-wave status line names the bonus just earned (Double)")
 	c._clear_wave()
 	check(console.bonus_pick_open and panel.message_label.text == "You just earned DOUBLE MISSILE. You can only have one missile bonus." and not c.missile_bonus_offer_waiting, "Prompt opens when the wave is cleared")
-	panel.keep_button.pressed.emit()
+	panel.cards[0].pressed.emit()
 	check(c.missile_bonus_pick == "RAPID" and c.missile_bonus_set_offers == 0, "Kept; no extra after-set offer")
 	# Earned in Protect the fleet: the pick waits for the end of the round.
 	start_protect(1, 1)
@@ -334,7 +335,7 @@ func _run() -> void:
 	check(not console.bonus_pick_open and c.missile_bonus_offer_waiting, "Protect round: pick held")
 	c._end_protect("test")
 	check(console.bonus_pick_open, "Prompt opens when the round ends")
-	panel.keep_button.pressed.emit()
+	panel.cards[0].pressed.emit()
 	# Switched off: the prompt opens at once, as before.
 	clean(1)
 	c.auto_spawn = true
@@ -345,7 +346,7 @@ func _run() -> void:
 	c.set_process(true)
 	earn(17500)
 	check(console.bonus_pick_open, "Pick After Wave off: prompt opens mid-wave")
-	panel.keep_button.pressed.emit()
+	panel.cards[0].pressed.emit()
 	c.missile_bonus_pick_after_wave = true
 	# A new battle while the prompt is open closes it without a pick.
 	clean(1)
@@ -361,6 +362,7 @@ func _run() -> void:
 	lone.rapid_missile_bonus = true
 	lone.difficulty = 1
 	lone.active_difficulty = 1
+	lone.missile_bonus_pick_after_wave = false
 	lone._add_points(17500)
 	check(lone.rapid_missile_active() and not lone.missile_bonus_offer_open and lone.missile_bonus_offers == 1, "No console: keeps the current bonus")
 	lone.free()
@@ -389,7 +391,8 @@ func _run() -> void:
 	var hard_gunships := 0
 	for seed_value in range(10):
 		start_protect(2, 2, 500 + seed_value)
-		if not c.repair_tender().is_empty():
+		# 1.0.7.2: the tender may wait on your ship for the first damaged ship.
+		if not c.repair_tender().is_empty() or c.protect_tender_waiting:
 			hard_gunships += 1
 	check(hard_gunships == 10, "Hard: repair Gunship in every round after wave 10 (%d of 10)" % hard_gunships)
 	# Fleet spread: ships start further from the centre, always inside the scope.

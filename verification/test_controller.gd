@@ -5,6 +5,7 @@ extends SceneTree
 const ControllerBindings = preload("res://scripts/ControllerBindings.gd")
 const ControllerInput = preload("res://scripts/ControllerInput.gd")
 const LegacyNames = preload("res://scripts/LegacyNames.gd")
+const ControllerPanel = preload("res://scripts/ControllerPanel.gd")
 
 var checks := 0
 var failures := 0
@@ -103,6 +104,7 @@ func _run() -> void:
 	await _dead_zone_and_repeat()
 	await _settings_and_panel()
 	await _remapping_and_persistence()
+	await _stealth_and_emp_triggers()
 	await _bonus_pick()
 	await _battle_highlight()
 	await _game_over()
@@ -117,7 +119,10 @@ func _run() -> void:
 func _defaults() -> void:
 	var d := ControllerBindings.defaults()
 	check(d.a == "launch_interceptors" and d.b == "defense_shield" and d.x == "launch_gunship" and d.y == "firewall", "Default A/B/X/Y: Interceptors, Defense Shield, Gunship, Firewall")
-	check(d.rb == "rapid_repair" and d.lb == "jump" and d.lt == "" and d.rt == "", "Default RB Rapid Repair, LB Jump, LT/RT not set")
+	check(d.rb == "rapid_repair" and d.lb == "jump" and d.lt == "launch_stealth" and d.rt == "emp", "Default RB Rapid Repair, LB Jump, LT Stealth Interceptor, RT EMP (1.0.4)")
+	check(ControllerBindings.ACTIONS.size() == 8 and "launch_stealth" in ControllerBindings.ACTIONS and "emp" in ControllerBindings.ACTIONS, "Stealth Interceptor and EMP are battle actions (1.0.4)")
+	check(ControllerBindings.ACTION_NAMES.launch_stealth == "LAUNCH STEALTH INTERCEPTOR" and ControllerBindings.ACTION_NAMES.emp == "USE EMP", "Stealth and EMP action names")
+	check(ControllerBindings.unassigned_actions(d).is_empty() and ControllerBindings.unassigned_buttons(d).is_empty(), "Defaults: every button has an action and every action a button")
 	check(pad.bindings == d, "First run starts with the default controller buttons")
 	check(ControllerBindings.ACTION_NAMES.launch_interceptors.to_upper().contains("INTERCEPTOR") and ControllerBindings.ACTION_NAMES.launch_gunship.to_upper().contains("GUNSHIP") and ControllerBindings.ACTION_NAMES.defense_shield.to_upper().contains("SHIELD"), "Action names use the rebranded names")
 	var all_names := " ".join(PackedStringArray(ControllerBindings.ACTION_NAMES.values())).to_upper()
@@ -168,12 +173,16 @@ func _battle_actions() -> void:
 	tap(JOY_BUTTON_START)
 	check(count("launch") == 2 and not console.settings_open, "MENU twice: Settings opens and closes without launching")
 	# Unassigned LT/RT do nothing.
+	var trigger_bindings: Dictionary = pad.bindings.duplicate()
+	pad.bindings.lt = ""
+	pad.bindings.rt = ""
 	var before := count("launch") + count("gunship") + count("repair") + count("jump")
 	axis(JOY_AXIS_TRIGGER_LEFT, 1.0)
 	axis(JOY_AXIS_TRIGGER_LEFT, 0.0)
 	axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)
 	axis(JOY_AXIS_TRIGGER_RIGHT, 0.0)
 	check(count("launch") + count("gunship") + count("repair") + count("jump") == before, "Unassigned LT and RT do nothing")
+	pad.bindings = trigger_bindings
 	# Controller events are consumed, so Godot's menu focus cannot act a second time.
 	console.launch_button.grab_focus()
 	tap(JOY_BUTTON_A)
@@ -224,7 +233,7 @@ func _jump_hold() -> void:
 	console.open_bonus_pick("rapid", "double", false)
 	step(0.1)
 	check(pad.jump_hold_button == "" and pad.context() == "bonus", "Bonus pick opening cancels a Jump hold")
-	console.bonus_pick_panel.keep_button.pressed.emit()
+	console.bonus_pick_panel.cards[0].pressed.emit()
 	button(JOY_BUTTON_LEFT_SHOULDER, false)
 	step(1.5)
 	check(count("jump") == fired + 1 and not console.bonus_pick_open, "No Jump after the bonus pick closes")
@@ -296,7 +305,7 @@ func _dead_zone_and_repeat() -> void:
 	axis(JOY_AXIS_RIGHT_X, 0.0)
 	check(not pad.battle_highlight_visible, "Right stick does nothing")
 	# Trigger hysteresis: LT temporarily set to Gunship.
-	pad.bindings = ControllerBindings.set_extra(pad.bindings, "lt", "launch_gunship")
+	pad.bindings = ControllerBindings.choose(pad.bindings, "lt", "launch_gunship", "both")
 	all_enabled()
 	var g := count("gunship")
 	axis(JOY_AXIS_TRIGGER_LEFT, 0.5)
@@ -349,16 +358,25 @@ func _settings_and_panel() -> void:
 	tap(JOY_BUTTON_A)
 	check(panel.visible and pad.context() == "controller", "A on CONTROLLER opens the controller panel")
 	check(count("launch") == launches, "A in menus never launches Interceptors")
-	check(panel.header_label.text.contains("BATTLE PAUSED") and panel.header_label.text.contains("NO CONTROLLER CONNECTED"), "Panel header shows paused and the controller status")
+	check(panel.header_label.text.contains("BATTLE PAUSED") and panel.status_label.text.contains("NO CONTROLLER FOUND"), "Panel header shows paused; the status line shows the controller status")
 	check(not c.is_processing(), "Battle stays paused under the controller panel")
 	var labels := []
 	for row in panel.rows:
 		labels.append(row.name_label.text)
-	check(panel.rows.size() == 10, "Panel lists 6 actions, LT and RT, and the 2 fixed rows")
-	check(labels[0] == ControllerBindings.ACTION_NAMES.launch_interceptors and labels[5] == ControllerBindings.ACTION_NAMES.jump, "Rows start with Launch Interceptors and end the actions with Jump")
+	var keys := []
+	for row in panel.rows:
+		keys.append(row.keys_label.text)
+	check(panel.rows.size() == 10, "Panel lists the 8 controller buttons and the 2 fixed rows (1.0.4)")
+	check(keys.slice(0, 8) == ["A", "B", "X", "Y", "LB", "RB", "LT", "RT"], "One row per button, A to RT, in the BUTTON column")
+	check(labels[0] == ControllerBindings.ACTION_NAMES.launch_interceptors and labels[4] == "JUMP  (hold 1 s)" and labels[6] == "LAUNCH STEALTH INTERCEPTOR" and labels[7] == "USE EMP", "ACTION column: A Launch Interceptors, LB Jump (hold 1 s), LT Stealth, RT EMP")
+	var all_change := true
+	for i in range(8):
+		if panel.rows[i].button.text != "CHANGE" or panel.rows[i].button.disabled:
+			all_change = false
+	check(all_change, "Every button row has a CHANGE button (no SET rows)")
 	check(panel.rows[8].button.disabled and panel.rows[9].button.disabled and panel.rows[8].keys_label.text == "MENU", "MENU and D-pad/stick rows are fixed")
 	var targets: Array = pad.targets()
-	check(targets.size() == 10 and targets[-1] == panel.close_button and targets[-2] == panel.defaults_button, "Highlight reaches each CHANGE/SET button, DEFAULTS and CLOSE (fixed rows skipped)")
+	check(targets.size() == 11 and targets[-1] == panel.close_button and targets[-2] == panel.test_button and targets[-3] == panel.defaults_button and not targets.has(panel.copy_button), "Highlight reaches each CHANGE button, DEFAULTS, TEST BUTTONS and CLOSE (fixed rows and the small ! skipped)")
 	# Navigation by D-pad through the column.
 	pad.target = panel.rows[0].button
 	tap(JOY_BUTTON_DPAD_DOWN)
@@ -397,88 +415,297 @@ func _settings_and_panel() -> void:
 	check(not panel.visible, "Closing Settings never leaves the controller panel open")
 	await frames(1)
 
+func _picker_texts() -> Array:
+	var out := []
+	for item in panel.picker_items:
+		out.append(panel.item_text(item))
+	return out
+
+func _row_of(button_id: String) -> Dictionary:
+	return panel.rows[panel.row_index(button_id)]
+
 func _remapping_and_persistence() -> void:
 	console.open_settings()
 	console.open_controller_panel()
-	# CHANGE Launch Interceptors -> X. Gunship (on X) takes A.
+	# 1.0.4: CHANGE on A opens the list of every action.
 	pad.target = panel.rows[0].button
 	tap(JOY_BUTTON_A)
-	check(panel.is_capturing() and pad.context() == "capture", "A on CHANGE waits for the new button")
-	check(panel.rows[0].keys_label.text == "PRESS A BUTTON", "Row asks for the new button")
-	tap(JOY_BUTTON_X)
-	check(not panel.is_capturing(), "Pressing X finishes the change")
-	check(pad.bindings.x == "launch_interceptors" and pad.bindings.a == "launch_gunship", "Interceptors now on X; Gunship moved to A (swap, nothing lost)")
-	check(panel.notice.contains("moved"), "Panel says which action moved")
-	var saved := ControllerBindings.load_bindings(BINDINGS_FILE)
-	check(saved == pad.bindings, "Change is saved to the controller file")
-	check(not FileAccess.file_exists(BINDINGS_FILE + ".tmp"), "No temporary file left after saving")
-	# MENU cancels CHANGE without changing anything.
-	panel._on_change("jump")
+	check(panel.is_picking() and pad.context() == "picker" and panel.picker_layer.visible, "A on CHANGE opens the action list")
+	check(panel.picker_title.text == "CHOOSE AN ACTION FOR A", "The list says which button it is for")
+	var names := []
+	for action in ControllerBindings.ACTIONS:
+		names.append(ControllerBindings.ACTION_NAMES[action])
+	check(_picker_texts() == names, "The list shows all 8 actions, Stealth Interceptor and EMP included")
+	check(panel.picker_cancel.visible and pad.targets().size() == 9 and pad.targets()[-1] == panel.picker_cancel, "Highlight reaches the 8 actions and CANCEL, nothing behind the list")
+	check(pad.current_target() == panel.picker_items[0], "Highlight starts on the button's current action")
+	var note := panel.picker_items[0].get_node("Note") as Label
+	check(note != null and note.text == "CURRENT", "Current action is marked CURRENT")
+	var emp_note := panel.picker_items[7].get_node_or_null("Note") as Label
+	check(emp_note != null and emp_note.text == "ON RT", "Actions on other buttons show where they are (USE EMP: ON RT)")
+	tap(JOY_BUTTON_DPAD_DOWN)
+	check(pad.target == panel.picker_items[1], "D-pad down moves through the list")
+	tap(JOY_BUTTON_DPAD_UP)
+	# B closes the list with no change; the panel stays open.
+	tap(JOY_BUTTON_B)
+	check(not panel.is_picking() and panel.visible and pad.bindings == ControllerBindings.defaults(), "B closes the list without a change; the panel stays open")
+	check(pad.current_target() == panel.rows[0].button, "Highlight returns to A's CHANGE")
+	# MENU closes the list only.
+	panel.open_picker("a")
 	tap(JOY_BUTTON_START)
-	check(not panel.is_capturing() and panel.visible and pad.bindings.lb == "jump", "MENU cancels CHANGE, nothing changed, panel stays open")
-	# Esc / B cancels CHANGE (B is captured as a button, so Esc and timeout are the cancels).
-	panel._on_change("jump")
+	check(not panel.is_picking() and panel.visible and console.settings_open, "MENU closes the list without a change; the panel stays open")
+	# Esc / back and CANCEL.
+	panel.open_picker("a")
 	panel.back()
-	check(not panel.is_capturing() and panel.visible, "Esc cancels CHANGE first")
-	panel._on_change("jump")
-	panel._process(7.0)
-	check(not panel.is_capturing() and pad.bindings.lb == "jump", "CHANGE gives up after 6 seconds")
-	# MENU cannot be assigned.
-	panel._on_change("jump")
-	check(not panel.capture("menu") or panel.is_capturing() or pad.bindings.lb == "jump", "MENU is never assigned to an action")
-	panel.cancel_capture()
-	# Jump moved to RT (trigger) keeps the hold.
-	panel._on_change("jump")
-	axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)
-	axis(JOY_AXIS_TRIGGER_RIGHT, 0.0)
-	check(pad.bindings.rt == "jump" and pad.bindings.lb == "", "CHANGE accepts a trigger (Jump on RT, LB freed)")
-	# SET on a spare row cycles actions; never strips an action's only button.
-	var lb_row := -1
-	for i in range(panel.rows.size()):
-		if panel.rows[i].key == "button:lb":
-			lb_row = i
-	check(lb_row != -1, "Freed LB appears as a spare SET row")
-	panel._on_set("lb")
-	check(pad.bindings.lb == ControllerBindings.ACTIONS[0], "SET gives the spare button the first action")
-	for i in range(ControllerBindings.ACTIONS.size()):
-		panel._on_set("lb")
-	check(pad.bindings.lb == "", "SET cycles back to not set")
+	check(not panel.is_picking() and panel.visible, "Esc closes the list first")
+	panel.open_picker("a")
+	panel.picker_cancel.pressed.emit()
+	check(not panel.is_picking() and pad.bindings == ControllerBindings.defaults() and panel.notice.contains("Nothing was changed"), "CANCEL closes the list: nothing changed")
+	# Picking the current action changes nothing.
+	panel.open_picker("a")
+	panel.picker_items[0].pressed.emit()
+	check(not panel.is_picking() and pad.bindings == ControllerBindings.defaults(), "Picking the current action closes the list with no change")
+	# Picking an action no other button has: applied at once. (Clear RT first.)
+	var free := ControllerBindings.defaults()
+	free.rt = ""
+	pad.set_bindings(free)
+	panel.open(pad.bindings)
+	panel.open_picker("b")
+	panel.picker_items[ControllerBindings.ACTIONS.find("emp")].pressed.emit()
+	check(not panel.is_picking() and pad.bindings.b == "emp" and pad.bindings.rt == "", "A free action is applied straight away; the list closes")
+	check(_row_of("b").name_label.text == "USE EMP", "The B row shows its new action")
+	check(panel.notice.contains("B is now USE EMP") and panel.notice.contains("DEFENSE SHIELD has no button now"), "Panel says what changed and that Defense Shield has no button now")
+	check(ControllerBindings.load_bindings(BINDINGS_FILE) == pad.bindings, "Change is saved to the controller file")
+	check(not FileAccess.file_exists(BINDINGS_FILE + ".tmp"), "No temporary file left after saving")
+	# Picking an action another button has: the choice step.
+	pad.set_bindings(ControllerBindings.defaults())
+	panel.open(pad.bindings)
+	panel.open_picker("a")
+	pad._after_context_change()
+	pad.target = panel.picker_items[ControllerBindings.ACTIONS.find("emp")]
+	tap(JOY_BUTTON_A)
+	check(panel.is_picking() and panel.picker_step == "choice" and pad.context() == "picker", "Picking an action on another button asks what to do")
+	check(panel.picker_title.text == "USE EMP IS ALREADY ON RT" and panel.picker_subtitle.text == "What would you like to do?", "The question names the action and the other button")
+	check(_picker_texts() == ["SWAP THE TWO BUTTONS", "USE BOTH BUTTONS", "MOVE IT HERE", "CANCEL"], "Choices: swap, use both, move it here, cancel")
+	var details := []
+	for item in panel.picker_items:
+		details.append((item.get_node("Detail") as Label).text)
+	check(details == ["RT gets LAUNCH INTERCEPTORS.", "A and RT will both do USE EMP.", "RT becomes (not set).", "Nothing changes."], "Each choice says what will happen")
+	check(pad.targets().size() == 4 and not panel.picker_cancel.visible, "Highlight reaches the four choices")
+	# B on the choice step goes back to the list.
+	tap(JOY_BUTTON_B)
+	check(panel.is_picking() and panel.picker_step == "list" and _picker_texts().size() == 8, "B on the choice goes back to the list")
+	panel.pick("emp")
+	# CANCEL on the choice: nothing changes.
+	panel.picker_items[3].pressed.emit()
+	check(not panel.is_picking() and pad.bindings == ControllerBindings.defaults(), "CANCEL choice: nothing changes, the list closes")
+	# SWAP.
+	panel.open_picker("a")
+	panel.pick("emp")
+	pad._after_context_change()
+	check(pad.current_target() == panel.picker_items[0], "Highlight starts on SWAP")
+	tap(JOY_BUTTON_A)
+	check(not panel.is_picking() and pad.bindings.a == "emp" and pad.bindings.rt == "launch_interceptors", "SWAP: A uses the EMP, RT launches Interceptors")
+	check(_row_of("a").name_label.text == "USE EMP" and _row_of("rt").name_label.text == "LAUNCH INTERCEPTORS", "Both rows update")
+	check(panel.notice == "A is now USE EMP. RT is now LAUNCH INTERCEPTORS.", "Panel says what swapped")
+	check(ControllerBindings.load_bindings(BINDINGS_FILE) == pad.bindings, "Swap is saved")
+	check(pad.current_target() == _row_of("a").button, "Highlight returns to A's CHANGE")
+	# USE BOTH.
+	pad.set_bindings(ControllerBindings.defaults())
+	panel.open(pad.bindings)
+	panel.open_picker("y")
+	panel.pick("jump")
+	panel.picker_items[1].pressed.emit()
+	check(pad.bindings.y == "jump" and pad.bindings.lb == "jump", "USE BOTH: Y and LB both Jump")
+	check(ControllerBindings.buttons_for(pad.bindings, "firewall").is_empty() and panel.notice.contains("FIREWALL has no button now"), "Firewall has no button now, and the panel says so")
+	check(_row_of("y").name_label.text == "JUMP  (hold 1 s)", "Y row shows Jump (hold 1 s)")
+	# Jump on two buttons keeps the hold on both (back in the battle).
+	console.close_settings()
+	all_enabled()
+	var j := count("jump")
+	button(JOY_BUTTON_Y, true)
+	step(0.4)
+	check(count("jump") == j, "Jump on Y does not jump at once")
+	step(0.7)
+	button(JOY_BUTTON_Y, false)
+	check(count("jump") == j + 1, "Jump on Y still needs the one-second hold")
+	console.open_settings()
+	console.open_controller_panel()
+	# MOVE IT HERE.
+	panel.open_picker("x")
+	panel.pick("rapid_repair")
+	panel.picker_items[2].pressed.emit()
+	check(pad.bindings.x == "rapid_repair" and pad.bindings.rb == "", "MOVE IT HERE: X Rapid Repair, RB (not set)")
+	check(_row_of("rb").name_label.text == "(not set)" and _row_of("rb").name_label.get_theme_color("font_color") == ControllerPanel.MUTED, "RB row shows (not set) in grey")
+	check(panel.notice.contains("RB is now (not set)") and panel.notice.contains("LAUNCH GUNSHIP has no button now"), "Panel says RB is not set and Gunship has no button")
+	# The (not set) button can be given an action from the list.
+	panel.open_picker("rb")
+	check(panel.picker_title.text == "CHOOSE AN ACTION FOR RB" and panel.picker_items[ControllerBindings.ACTIONS.find("launch_gunship")].get_node_or_null("Note") == null, "An action with no button has no ON note")
+	panel.pick("launch_gunship")
+	check(pad.bindings.rb == "launch_gunship" and not panel.is_picking(), "A (not set) button takes a free action")
+	# Mouse/touch path: CHANGE and list items are plain buttons.
+	panel.rows[panel.row_index("lt")].button.pressed.emit()
+	check(panel.is_picking() and panel.picking_button == "lt", "CHANGE works with the mouse")
+	panel.picker_items[0].pressed.emit()
+	check(panel.picker_step == "choice", "List items work with the mouse")
+	panel.picker_items[3].pressed.emit()
+	check(not panel.is_picking() and pad.bindings.lt == "launch_stealth", "CANCEL works with the mouse")
+	# PlayStation names in the list.
+	panel.playstation_names = true
+	panel.open_picker("a")
+	panel.pick("emp")
+	check(panel.picker_title.text == "USE EMP IS ALREADY ON R2", "PlayStation names in the question (R2)")
+	panel.cancel_picker()
+	panel.playstation_names = false
+	# TEST BUTTONS closes the list.
+	panel.open_picker("a")
+	panel.start_test()
+	check(not panel.is_picking() and panel.is_testing(), "TEST BUTTONS closes the list")
+	panel.stop_test()
+	# Closing the panel closes the list.
+	panel.open_picker("a")
+	panel.close_button.pressed.emit()
+	check(not panel.is_picking() and not panel.picker_layer.visible, "CLOSE never leaves the list open")
+	console.open_controller_panel()
 	# DEFAULTS needs a second press.
 	panel._on_defaults_pressed()
-	check(panel.defaults_button.text == "CONFIRM" and pad.bindings.rt == "jump", "DEFAULTS asks to confirm first")
+	check(panel.defaults_button.text == "CONFIRM" and pad.bindings.y == "jump", "DEFAULTS asks to confirm first")
 	panel._on_defaults_pressed()
-	check(pad.bindings == ControllerBindings.defaults(), "CONFIRM restores the default buttons")
+	check(pad.bindings == ControllerBindings.defaults(), "CONFIRM restores the default buttons (LT Stealth, RT EMP)")
 	check(ControllerBindings.load_bindings(BINDINGS_FILE) == ControllerBindings.defaults(), "Defaults are saved")
 	# Settings DEFAULTS and the settings file are separate.
-	pad.set_bindings(ControllerBindings.assign(pad.bindings, "firewall", "rt"))
+	pad.set_bindings(ControllerBindings.choose(pad.bindings, "rt", "firewall", "move"))
 	var settings_text := FileAccess.get_file_as_string(SETTINGS_FILE) if FileAccess.file_exists(SETTINGS_FILE) else ""
 	check(not settings_text.contains("controller") and not settings_text.contains("launch_interceptors"), "Controller buttons are not stored in the settings file")
 	# Restart: a new console reads the same file.
 	var reread := ControllerBindings.load_bindings(BINDINGS_FILE)
-	check(reread.rt == "firewall" and reread.y == "", "Saved buttons come back after a restart")
-	# Damaged file: defaults, no crash.
+	check(reread.rt == "firewall" and reread.y == "", "Saved buttons come back after a restart, blanks included")
+	var saved_text := FileAccess.get_file_as_string(BINDINGS_FILE)
+	check(saved_text.contains("format=2"), "Saved file is format 2")
+	# 1.0.4 upgrade: a 1.0.0-1.0.3 file with blank LT/RT gets Stealth and EMP.
 	var f := FileAccess.open(BINDINGS_FILE, FileAccess.WRITE)
+	f.store_string("[controller]\nformat=1\na=\"launch_gunship\"\nb=\"defense_shield\"\nx=\"launch_interceptors\"\ny=\"firewall\"\nlb=\"jump\"\nrb=\"rapid_repair\"\nlt=\"\"\nrt=\"\"\n")
+	f.close()
+	var upgraded := ControllerBindings.load_bindings(BINDINGS_FILE)
+	check(upgraded.lt == "launch_stealth" and upgraded.rt == "emp", "Older saved setup: blank LT and RT get Stealth and EMP")
+	check(upgraded.a == "launch_gunship" and upgraded.x == "launch_interceptors", "Older saved setup: the player's own buttons are kept")
+	f = FileAccess.open(BINDINGS_FILE, FileAccess.WRITE)
+	f.store_string("[controller]\nformat=1\na=\"launch_interceptors\"\nb=\"defense_shield\"\nx=\"launch_gunship\"\ny=\"\"\nlb=\"jump\"\nrb=\"rapid_repair\"\nlt=\"firewall\"\nrt=\"\"\n")
+	f.close()
+	upgraded = ControllerBindings.load_bindings(BINDINGS_FILE)
+	check(upgraded.lt == "firewall" and upgraded.rt == "emp" and upgraded.y == "", "Older saved setup: a trigger the player set is kept; only the blank one is filled")
+	var migrated := ControllerBindings.migrate({"a": "launch_interceptors"}, 2)
+	check(migrated.lt == "launch_stealth", "Missing keys use the defaults")
+	check(ControllerBindings.migrate({"lt": "", "rt": ""}, 2).lt == "", "Format 2 blanks stay blank (the player's choice)")
+	# Damaged file: defaults, no crash.
+	f = FileAccess.open(BINDINGS_FILE, FileAccess.WRITE)
 	f.store_string("[controller]\na=\"warp_drive\"\nb=42\nx=7.5\nlb=[1, 2]\n")
 	f.close()
 	var damaged := ControllerBindings.load_bindings(BINDINGS_FILE)
 	check(damaged == ControllerBindings.defaults(), "Damaged controller file falls back to the defaults")
 	var partial := ControllerBindings.clean({"a": "warp_drive", "b": 7})
 	check(partial.a == "launch_interceptors" and partial.b == "defense_shield", "Unknown values are replaced with the default")
-	var every := true
-	for action in ControllerBindings.ACTIONS:
-		if ControllerBindings.buttons_for(ControllerBindings.assign(ControllerBindings.defaults(), action, "a"), action).is_empty():
-			every = false
-	check(every, "Every action can be moved to A")
+	# Every button can take every action, with each choice.
+	var all_ok := true
+	for b in ControllerBindings.BUTTONS:
+		for action in ControllerBindings.ACTIONS:
+			for choice in ["swap", "both", "move"]:
+				var d := ControllerBindings.defaults()
+				var out := ControllerBindings.choose(d, b, action, choice)
+				if out[b] != action:
+					all_ok = false
+				var others := ControllerBindings.conflicts(d, b, action)
+				for other in others:
+					var expect: String = d[b] if choice == "swap" else (action if choice == "both" else "")
+					if out[other] != expect:
+						all_ok = false
+				for rest in ControllerBindings.BUTTONS:
+					if rest != b and not rest in others and out[rest] != d[rest]:
+						all_ok = false
+	check(all_ok, "Every button can take every action; swap/both/move touch only the buttons involved (192 cases)")
 	var swap_ok := true
-	for action in ControllerBindings.ACTIONS:
-		for b in ControllerBindings.BUTTONS:
-			var out := ControllerBindings.assign(ControllerBindings.defaults(), action, b)
-			for other in ControllerBindings.ACTIONS:
-				if ControllerBindings.buttons_for(out, other).is_empty():
-					swap_ok = false
-	check(swap_ok, "No CHANGE from the defaults leaves an action without a button")
+	for b in ControllerBindings.BUTTONS:
+		for action in ControllerBindings.ACTIONS:
+			if not ControllerBindings.unassigned_actions(ControllerBindings.choose(ControllerBindings.defaults(), b, action, "swap")).is_empty():
+				swap_ok = false
+	check(swap_ok, "SWAP from the defaults never leaves an action without a button")
+	check(ControllerBindings.choose(ControllerBindings.defaults(), "a", "emp", "") == ControllerBindings.defaults(), "No choice given for a used action: nothing changes")
+	check(ControllerBindings.choose(ControllerBindings.defaults(), "menu", "emp", "swap") == ControllerBindings.defaults(), "MENU is never given an action")
 	pad.set_bindings(ControllerBindings.defaults())
 	console.close_settings()
+	await frames(1)
+
+## 1.0.4: LT launches the Stealth Interceptor and RT uses the EMP (defaults).
+func _stealth_and_emp_triggers() -> void:
+	all_enabled()
+	pad.hide_battle_highlight()
+	pad.set_bindings(ControllerBindings.defaults())
+	var ship: Control = console.get_node("ShipStatus")
+	ship.set_process(false)
+	var stealth := [0]
+	ship.stealth_button.pressed.connect(func() -> void: stealth[0] += 1)
+	var was_visible: bool = ship.stealth_button.visible
+	var was_disabled: bool = ship.stealth_button.disabled
+	ship.stealth_button.visible = false
+	axis(JOY_AXIS_TRIGGER_LEFT, 1.0)
+	axis(JOY_AXIS_TRIGGER_LEFT, 0.0)
+	check(stealth[0] == 0, "LT does nothing while the Stealth Interceptor is not offered")
+	ship.stealth_button.visible = true
+	ship.stealth_button.disabled = false
+	await frames(1)
+	axis(JOY_AXIS_TRIGGER_LEFT, 1.0)
+	axis(JOY_AXIS_TRIGGER_LEFT, 0.0)
+	check(stealth[0] == 1, "LT launches the Stealth Interceptor through its own button")
+	check(pad.flash_control == ship.stealth_button, "LT lights the special weapon it pressed")
+	ship.stealth_button.disabled = true
+	axis(JOY_AXIS_TRIGGER_LEFT, 1.0)
+	axis(JOY_AXIS_TRIGGER_LEFT, 0.0)
+	check(stealth[0] == 1, "Greyed-out Stealth Interceptor is not fired by LT")
+	ship.stealth_button.visible = was_visible
+	ship.stealth_button.disabled = was_disabled
+	var emp := [0]
+	var ship_emp := [0]
+	console.emp_split_button.pressed.connect(func() -> void: emp[0] += 1)
+	ship.emp_button.pressed.connect(func() -> void: ship_emp[0] += 1)
+	var vis: bool = console.emp_split_button.visible
+	var dis: bool = console.emp_split_button.disabled
+	var svis: bool = ship.emp_button.visible
+	console.emp_split_button.visible = false
+	ship.emp_button.visible = false
+	axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	axis(JOY_AXIS_TRIGGER_RIGHT, 0.0)
+	check(emp[0] == 0 and ship_emp[0] == 0, "RT does nothing while no EMP is offered")
+	console.emp_split_button.visible = true
+	console.emp_split_button.disabled = false
+	await frames(1)
+	axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	axis(JOY_AXIS_TRIGGER_RIGHT, 0.0)
+	check(emp[0] == 1 and ship_emp[0] == 0, "RT uses the EMP through the EMP half of FIREWALL")
+	console.emp_split_button.visible = false
+	ship.emp_button.visible = true
+	ship.emp_button.disabled = false
+	await frames(1)
+	axis(JOY_AXIS_TRIGGER_RIGHT, 1.0)
+	axis(JOY_AXIS_TRIGGER_RIGHT, 0.0)
+	check(ship_emp[0] == 1, "RT uses the EMP on the ship when that is the one shown")
+	console.emp_split_button.visible = vis
+	console.emp_split_button.disabled = dis
+	ship.emp_button.visible = svis
+	# Stealth on a face button works the same way.
+	pad.set_bindings(ControllerBindings.choose(ControllerBindings.defaults(), "a", "launch_stealth", "swap"))
+	ship.stealth_button.visible = true
+	ship.stealth_button.disabled = false
+	await frames(1)
+	var l := count("launch")
+	tap(JOY_BUTTON_A)
+	check(stealth[0] == 2 and count("launch") == l, "Stealth Interceptor moved to A: A launches it, not Interceptors")
+	axis(JOY_AXIS_TRIGGER_LEFT, 1.0)
+	axis(JOY_AXIS_TRIGGER_LEFT, 0.0)
+	check(count("launch") == l + 1, "After the swap, LT launches Interceptors")
+	ship.stealth_button.visible = was_visible
+	ship.stealth_button.disabled = was_disabled
+	pad.set_bindings(ControllerBindings.defaults())
+	ship.set_process(true)
+	pad._process(0.5)
 	await frames(1)
 
 func _bonus_pick() -> void:
@@ -486,20 +713,22 @@ func _bonus_pick() -> void:
 	console.open_bonus_pick("rapid", "double", false)
 	await frames(1)
 	check(pad.context() == "bonus", "Bonus pick is its own controller screen")
+	check(not console.bonus_pick_panel.waiting, "1.0.5: the countdown runs until the player does something")
 	tap(JOY_BUTTON_START)
 	check(console.bonus_pick_open and not console.settings_open, "MENU cannot skip the bonus pick")
+	check(console.bonus_pick_panel.waiting and console.bonus_pick_panel.stopped_by == "controller" and console.bonus_pick_panel.timeout_label.text == "Pick a bonus", "1.0.5: using the controller stops the countdown")
 	tap(JOY_BUTTON_B)
 	check(console.bonus_pick_open, "B does not dismiss the bonus pick")
 	pad._after_context_change()
-	check(pad.current_target() == console.bonus_pick_panel.keep_button, "Highlight starts on KEEP")
+	check(pad.current_target() == console.bonus_pick_panel.cards[0] and console.bonus_pick_panel.highlighted == 0, "Highlight starts on the current bonus card")
 	tap(JOY_BUTTON_DPAD_RIGHT)
-	check(pad.target == console.bonus_pick_panel.take_button, "Right moves to TAKE")
+	check(pad.target == console.bonus_pick_panel.cards[1] and console.bonus_pick_panel.highlighted == 1, "Right moves to the other card")
 	tap(JOY_BUTTON_A)
 	check(not console.bonus_pick_open and count("launch") == launches, "A takes the highlighted choice and launches nothing")
 	console.open_bonus_pick("rapid", "double", false)
 	pad._after_context_change()
 	tap(JOY_BUTTON_A)
-	check(not console.bonus_pick_open, "A on KEEP keeps the bonus")
+	check(not console.bonus_pick_open, "A on the current card keeps the bonus")
 	await frames(1)
 
 func _battle_highlight() -> void:
@@ -635,6 +864,9 @@ func _game_over() -> void:
 	c.score = 900
 	c.apply_damage(100000.0)
 	console._process(0.016)
+	# 1.0.8: the score screen comes in front 3 s after the ship is destroyed (SYSTEMS OFFLINE first).
+	console.damage_effects.skip_to_score_screen()
+	console._process(0.016)
 	await frames(2)
 	console.set_process(false)
 	check(console.game_over_panel.visible and console.entry_active and pad.context() == "initials", "Game over with a high score asks for initials")
@@ -680,7 +912,7 @@ func _hotplug() -> void:
 	console.open_settings()
 	console.open_controller_panel()
 	pad._on_joy_connection_changed(4, false)
-	check(panel.visible and panel.header_label.text.contains("NO CONTROLLER CONNECTED"), "Panel header refreshes when a controller goes away")
+	check(panel.visible and panel.status_label.text.contains("NO CONTROLLER FOUND"), "Status line refreshes when a controller goes away")
 	console.close_settings()
 	# Long names are cut.
 	check(ControllerInput.is_playstation_name("DualSense Wireless Controller") and ControllerInput.is_playstation_name("PS4 Controller") and not ControllerInput.is_playstation_name("Xbox Series X Controller"), "PlayStation controllers recognised by name")

@@ -90,13 +90,13 @@ func _run() -> void:
 	clean()
 
 	# --- Full build 1.07 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 1.08")
-	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text reads STELLAR DEFENSE CONSOLE 1.0.1")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 1.08")
+	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.1", "Export presets name 1.08 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8", "Export presets name 1.08 files")
 
 	# --- 1. Enemy missiles pulse, never vanish ---
 	var b := base()

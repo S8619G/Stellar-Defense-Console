@@ -109,6 +109,11 @@ func _run() -> void:
 	console.quit_dry_run = true
 	console.shell_dry_run = true
 	var c: Control = console.get_node("CenterContainer/Dome/Contacts")
+	# 1.0.7: these checks cover the 1.2.2 round rules; the Breacher has its own suite (test_protect_convoy).
+	c.protect_breachers = false
+	# 1.0.7: these checks cover the 60 s limit; the new round end is checked in test_protect_convoy.
+	c.protect_timer_end = true
+	c.protect_interceptors_lost_end = false
 	for _k130 in V130_OFF: c.set(_k130, V130_OFF[_k130])
 	# 1.2.9: this test checks the 1.2.8 Protect the fleet round, so the 1.2.9 round
 	# switches the scene turns on are set back to their script defaults (the 1.2.8 round).
@@ -134,14 +139,14 @@ func _run() -> void:
 	c.battle_event.connect(on_event)
 
 	# --- Version 1.2.2 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 1.2.2")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text reads STELLAR DEFENSE CONSOLE 1.0.1")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 1.2.2")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.1"
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.1", "Export presets name 1.2.2 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.8"
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8", "Export presets name 1.2.2 files")
 
 	# --- Item 1: wave tally border ---
 	check(is_equal_approx(c.rest_tally_border_width, 3.0), "Wave tally border is 3 px (was 1), an Inspector value")
@@ -293,8 +298,8 @@ func _run() -> void:
 	c.wave = 5
 	c._clear_wave()
 	check(c.wave_next_phase == "protect" and c.sets_completed == 1, "Clearing the Major engagement: Protect the fleet is next")
-	check(c.inbound_message().begins_with("PROTECT THE FLEET INBOUND"), "Inbound line names Protect the fleet")
-	check(c.rest_tally_lines()[-1].begins_with("NEXT  PROTECT THE FLEET  IN"), "Tally: NEXT PROTECT THE FLEET")
+	check(c.inbound_message().begins_with("PROTECT THE CONVOY INBOUND"), "Inbound line names Protect the fleet")
+	check(c.rest_tally_lines()[-1].begins_with("NEXT  PROTECT THE CONVOY  IN"), "Tally: NEXT PROTECT THE CONVOY")
 	check(c.next_wave_number() == 5 and c.upcoming_trait.is_empty(), "No wave number or trait for the round")
 	var boosts_before: Dictionary = c.active_boosts.duplicate()
 	# Leftovers on the scope before the round.
@@ -307,13 +312,13 @@ func _run() -> void:
 	c.set_prox_defense(true)
 	c.wave_rest_remaining = 0.0
 	c.wave_inbound_announced = true
-	c.launch_cooldown_remaining = 3.0
+	c._hold_ready(c.interceptor_waits, 1, 3.0)
 	c._update_wave_system(0.1)
 	check(c.wave_phase == "protect" and c.protect_active(), "The round starts after the rest")
 	check(c.count_kind("carrier") == 0 and c.count_kind("missile") == 0 and c.count_kind("gunship") == 0 and c.count_interceptors() == 0 and protect_drones(c).size() == 0 and c.count_kind("drone") == 0,
 		"The scope is reset: no Enemy Carriers, missiles or leftover fighters")
 	check(not c.prox_active, "The Defense Shield stops")
-	check(c.status_message.begins_with("PROTECT THE FLEET"), "Status header reads PROTECT THE FLEET")
+	check(c.status_message.begins_with("PROTECT THE CONVOY"), "Status header reads PROTECT THE CONVOY")
 	var ships := civilians(c)
 	check(ships.size() >= 2 and ships.size() <= 4 and ships.size() == c.protect_civilians_total, "2 to 4 civilian ships appear (%d)" % ships.size())
 	var kinds_ok := true
@@ -360,16 +365,16 @@ func _run() -> void:
 	check(total_drones == 4, "Normal, after set 1: 4 Attack Drones")
 	var launched := 0
 	for i in range(10):
-		c.launch_cooldown_remaining = 0.0
-		c.interceptor_recovery_remaining = 0.0
+		c.interceptor_waits.clear()
+		c.interceptor_waits.clear()
 		launched += c.launch_interceptors()
 	check(launched == total_drones and c.count_interceptors() == total_drones and c.interceptor_limit() == total_drones, "Interceptor launches stop at the Attack Drone count (%d)" % launched)
 	for i in range(c.contacts.size() - 1, -1, -1):
 		if c.contacts[i].kind == "interceptor":
 			c.contacts.remove_at(i)
 			break
-	c.launch_cooldown_remaining = 0.0
-	c.interceptor_recovery_remaining = 0.0
+	c.interceptor_waits.clear()
+	c.interceptor_waits.clear()
 	check(c.launch_interceptors() == 0 and c.interceptor_limit() == c.count_interceptors(), "A lost Interceptor is not replaced: launches, not Interceptors on the scope, are capped")
 	# Auto options pause.
 	start_protect(c, 1)
@@ -437,10 +442,10 @@ func _run() -> void:
 	# Damage colors: blue dimming to grey-blue, blinking when critical, never amber or red.
 	start_protect(c, 1)
 	var ship_c: Dictionary = civilians(c)[0]
-	check(c.display_color(ship_c).is_equal_approx(c.civilian_color) and c.contact_tag(ship_c) == "CIVILIAN 100%", "Undamaged: blue, CIVILIAN 100%")
+	check(c.display_color(ship_c).is_equal_approx(c.civilian_color) and c.contact_tag(ship_c) == "SUPPORT 100%", "Undamaged: blue, SUPPORT 100%")
 	ship_c.hull = 0.6
 	var mid_color: Color = c.display_color(ship_c)
-	check(mid_color.is_equal_approx(c.civilian_damaged_color.lerp(c.civilian_color, 0.6)) and c.contact_tag(ship_c) == "CIVILIAN 60%", "60% hull: dimmer blue in proportion, CIVILIAN 60%")
+	check(mid_color.is_equal_approx(c.civilian_damaged_color.lerp(c.civilian_color, 0.6)) and c.contact_tag(ship_c) == "SUPPORT 60%", "60% hull: dimmer blue in proportion, SUPPORT 60%")
 	ship_c.hull = 0.2
 	var alphas := {}
 	for step in range(12):
@@ -484,8 +489,8 @@ func _run() -> void:
 	check(c.protect_saved == c.protect_civilians_total and c.last_protect_bonus == full_bonus and c.protect_full_fleets == 1, "Full fleet saved: 500 per ship + 1000, x score multiplier (%d)" % full_bonus)
 	var lines: Array[String] = c.rest_tally_lines()
 	# 1.2.7: result title, a detail line, the bonus on its own line, then its label.
-	check(lines[0] == "FLEET SAVED" and lines[1].begins_with("FLEET HULL") and c.protect_saved == c.protect_civilians_total, "Tally: FLEET SAVED, every ship saved; the detail line starts with the fleet hull (1.2.9)")
-	check(lines[1].contains("FLEET HULL 100%") and lines[2] == "+%d" % full_bonus and lines[3].ends_with("FULL FLEET"), "Tally: hull and bonus (1.2.7 layout)")
+	check(lines[0] == "SUPPORT FLEET SAVED" and lines[1].begins_with("SUPPORT HULL") and c.protect_saved == c.protect_civilians_total, "Tally: SUPPORT FLEET SAVED, every ship saved; the detail line starts with the fleet hull (1.2.9)")
+	check(lines[1].contains("SUPPORT HULL 100%") and lines[2] == "+%d" % full_bonus and lines[3].ends_with("FULL CONVOY"), "Tally: hull and bonus (1.2.7 layout)")
 	check(lines[-1].begins_with("NEXT  WAVE 6 PROBE"), "Tally: next wave 6")
 	check(c.count_kind("civilian_a") + c.count_kind("civilian_b") + c.count_kind("civilian_c") + c.count_kind("civilian_d") + c.count_kind("civilian_e") == 0, "Civilian ships leave after the round")
 	var interceptors_home := true
@@ -527,7 +532,7 @@ func _run() -> void:
 	for s in civilians(c):
 		c._remove_contact(s.id)
 	c._update_protect(0.1)
-	check(c.protect_end_reason == "FLEET LOST" and c.last_protect_bonus == 0 and c.protect_saved == 0, "All civilian ships lost: the round ends with no bonus")
+	check(c.protect_end_reason == "SUPPORT FLEET LOST" and c.last_protect_bonus == 0 and c.protect_saved == 0, "All civilian ships lost: the round ends with no bonus")
 	# A full unassisted round in the battle loop: Attack Drones only, no Enemy Carriers, missiles or nukes.
 	start_protect(c, 1, 99)
 	var only_drones := true
@@ -539,7 +544,7 @@ func _run() -> void:
 			if x.kind in ["carrier", "unknown", "missile", "nuke", "breacher", "siege_ship", "gunship", "own_missile"]:
 				only_drones = false
 	check(only_drones, "Unassisted round: Attack Drones only")
-	check(c.wave_phase == "rest" and c.protect_end_reason in ["FLEET LOST", "TIME"] and guard <= 601, "Unassisted round ends by the 60 s limit or the fleet lost (%s, %.1f s)" % [c.protect_end_reason, guard * 0.1])
+	check(c.wave_phase == "rest" and c.protect_end_reason in ["SUPPORT FLEET LOST", "TIME"] and guard <= 601, "Unassisted round ends by the 60 s limit or the fleet lost (%s, %.1f s)" % [c.protect_end_reason, guard * 0.1])
 	check(c.hull >= c.max_hull - 0.01, "Attack Drones in the round do not damage the ship")
 	print("V122_PROTECT unassisted reason=", c.protect_end_reason, " seconds=", guard * 0.1, " saved=", c.protect_saved, "/", c.protect_civilians_total, " lost=", c.protect_lost)
 	# JUMP. 1.2.7: the Protect Allow Jump option is removed; JUMP is always held in the round.
@@ -564,7 +569,7 @@ func _run() -> void:
 	console._process(0.0)
 	check(console.gunship_button.disabled and console.gunship_button.text.ends_with("INTERCEPTORS ONLY"), "LAUNCH GUNSHIP reads OFF | INTERCEPTORS ONLY")
 	check(console.prox_button.disabled and console.prox_button.text.ends_with("INTERCEPTORS ONLY"), "DEFENSE SHIELD reads OFF | INTERCEPTORS ONLY")
-	check(console.jump_button.disabled and console.jump_button.text.ends_with("HELD | PROTECT THE FLEET"), "JUMP reads HELD")
+	check(console.jump_button.disabled and console.jump_button.text.ends_with("HELD | PROTECT THE CONVOY"), "JUMP reads HELD")
 	check(not console.launch_button.disabled, "LAUNCH INTERCEPTORS is ready")
 	check(c.wave_phase_line().begins_with("ATTACK DRONES LEFT 4  |  "), "Right panel: Attack Drones left and time")
 	# Reset clears the round.

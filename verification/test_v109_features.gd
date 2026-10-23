@@ -105,13 +105,13 @@ func _run() -> void:
 	c.stealth_event.connect(func(m: String) -> void: events.append(m))
 
 	# --- Full build 1.09 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 1.09")
-	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text reads STELLAR DEFENSE CONSOLE 1.0.1")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 1.09")
+	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.1"
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8"
 		and presets.get_value("preset.1.options", "binary_format/architecture", "") == "universal", "Export presets name 1.09 files; Mac stays Universal")
 
 	# --- ANGLE on Qualcomm only ---

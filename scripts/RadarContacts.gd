@@ -7,6 +7,8 @@ signal arrival_beep_played(contact_id: String, kind: String)
 signal interceptor_launch_played(count: int)
 signal hostile_intercepted(interceptor_id: String, hostile_id: String)
 signal ship_damaged(amount: float, hull_remaining: float)
+## 1.0.8: a nuke hit the ship (full = direct hit; false = Defense Shield partial hit). Visual cue only.
+signal nuke_hit_ship(full: bool)
 signal jump_completed
 ## 1.08: a Breacher breach took JUMP offline (true) or the hack ended (false).
 signal jump_offline_changed(offline: bool)
@@ -208,9 +210,11 @@ const SMALL_HOSTILE_KINDS := ["drone"]
 @export_group("Gunships")
 @export_range(1, 4) var max_gunships: int = 2
 @export_range(0.03, 0.13) var gunship_speed: float = 0.10
+## 1.0.5: after a launch, Gunships that were already ready wait this long before the
+## next launch (ships still counting down keep their own countdown).
 @export_range(2.0, 30.0) var gunship_launch_cooldown: float = 8.0
-## 1.1.0: after a Gunship lands, LAUNCH GUNSHIP waits this long (each landing restarts it).
-## When the launch cooldown is longer, the longer one wins. Auto Launch waits too.
+## 1.0.5: after a Gunship lands, that Gunship waits this long before it is ready again.
+## Each Gunship has its own wait; a landing never restarts another Gunship's wait.
 @export_range(0.0, 20.0) var gunship_recovery_seconds: float = 5.0
 @export_range(30.0, 180.0) var gunship_sortie_seconds: float = 70.0
 @export_range(3.0, 20.0) var gunship_fire_interval: float = 8.0
@@ -297,7 +301,7 @@ const SMALL_HOSTILE_KINDS := ["drone"]
 @export var set_modifiers_enabled: bool = true
 ## 1.2.2: the round after each Major engagement. Protect the fleet (civilian ships
 ## under Attack Drone attack, Interceptors only), the 1.2.0 bonus Attack Drone sweep, or none.
-@export_enum("Protect the fleet", "Bonus sweep", "None") var set_end_round: int = 0
+@export_enum("Protect the convoy", "Bonus sweep", "None") var set_end_round: int = 0
 ## 1.2.0 bonus sweep settings (used when Set End Round is Bonus sweep).
 @export_range(3, 24) var sweep_drones: int = 12
 @export_range(1, 6) var sweep_group_size: int = 3
@@ -516,6 +520,7 @@ var evade_outside := 0
 ## Repair Rate of its hull per second, up to Repair Cap.
 @export var civilian_self_repair: bool = false
 @export_range(0.0, 20.0) var civilian_repair_delay: float = 3.0
+## 1.0.7.2: the console scene sets 0.02 (half the 1.2.9 speed).
 @export_range(0.0, 0.5) var civilian_repair_rate: float = 0.04
 @export_range(0.0, 1.0) var civilian_repair_cap: float = 0.75
 @export_subgroup("Repair Tender 1.2.9")
@@ -550,6 +555,96 @@ var evade_outside := 0
 ## scope, as a multiple of the 1.2.9 layout (1.0 = as before; ships always stay inside
 ## the scope outline).
 @export_range(0.5, 2.0) var protect_fleet_spread: float = 1.6
+@export_subgroup("Smart Drones 1.0.7")
+## 1.0.7 Protect the convoy: Attack Drones jump in spread out and each goes after its own
+## support ship. When an Interceptor chases one, it weaves, speeds up, switches to a ship
+## away from the chaser and fires rapid bursts back, while still hurting ships in range.
+## Off = the 1.0.6 round (Dogfights rules). The console scene turns it on.
+@export var protect_smart_drones: bool = false
+## How strongly a drone avoids a ship another drone already attacks (bigger = more spread).
+@export_range(0.0, 3.0) var protect_split_claim_pull: float = 1.4
+## Drones keep at least this far apart (scope radii; 0 = no spacing).
+@export_range(0.0, 0.4) var protect_drone_separation: float = 0.13
+## A chased drone flies this much faster and weaves this wide.
+@export_range(1.0, 2.0) var protect_evade_speed_factor: float = 1.25
+@export_range(0.0, 0.2) var protect_evade_weave: float = 0.06
+## Share of normal ship damage a chased drone still does while it evades.
+@export_range(0.0, 1.0) var protect_evade_damage_factor: float = 0.75
+## A chased drone fires a burst at the chaser when it is this close, every Burst Gap
+## seconds; each burst downs the Interceptor with Burst Loss Chance.
+@export_range(0.05, 0.4) var protect_return_fire_range: float = 0.16
+@export_range(0.3, 5.0) var protect_burst_gap: float = 1.5
+@export_range(1, 8) var protect_burst_rounds: int = 5
+@export_range(0.0, 1.0) var protect_burst_loss_chance: float = 0.06
+## Seconds between new-ship choices while chased.
+@export_range(0.5, 10.0) var protect_retarget_seconds: float = 2.5
+## Short gunfire lines for drone bursts and Interceptor hits in the round.
+@export var protect_tracers: bool = false
+@export var protect_tracer_color := Color(1.0, 0.86, 0.45)
+@export var protect_drone_tracer_color := Color(1.0, 0.42, 0.36)
+@export_subgroup("Smart Repair Tender 1.0.7")
+## 1.0.7: the repair tender flies faster and every Retarget seconds re-picks the ship that
+## needs it most: ships under attack (or with a Breacher on them) and low on hull first,
+## skipping ships it cannot reach before they are lost. It switches only when the new ship
+## is clearly more urgent (Switch Margin), so it does not flip back and forth.
+@export var protect_tender_smart: bool = false
+## Flying speed in scope radii per second (Attack Drones fly 0.07).
+@export_range(0.02, 0.3) var protect_tender_speed: float = 0.07
+@export_range(0.2, 5.0) var protect_tender_retarget_seconds: float = 0.75
+@export_range(0.0, 1.0) var protect_tender_switch_margin: float = 0.25
+## Where the tender starts: 0 = beside your ship (as before), 1 = jumps in beside the convoy.
+@export var protect_tender_jump_in: bool = false
+## Ships above this hull that are not under attack are left alone (no long trips for a scratch).
+@export_range(0.5, 1.0) var protect_tender_ignore_above: float = 0.9
+@export_subgroup("Repair Tender 1.0.7.2")
+## 1.0.7.2: in a round that has a tender, it waits on your ship and launches the first
+## time any support ship has lost more than Launch Damage of its hull.
+@export var protect_tender_launch_when_hit: bool = false
+@export_range(0.0, 0.5) var protect_tender_launch_damage: float = 0.04
+## 1.0.7.2: with no ship to repair, the tender waits near the convoy and the fight
+## instead of flying back to your ship.
+@export var protect_tender_stay_near: bool = false
+## 1.0.7.2: Attack Drones attacking close to the tender damage it as fast as they damage
+## the biggest support ship. Destroyed = gone for the rest of the round.
+@export var protect_tender_hull: bool = false
+## 1.0.7.2: after the round a surviving tender flies home and lands on your ship.
+@export var protect_tender_lands: bool = false
+## 1.0.7.2: top of the Protect the convoy result box, in scope radii from the centre
+## (negative = above the centre). 0.22 = the 1.0.7.1 position.
+@export_range(-0.95, 0.8) var protect_result_offset: float = 0.22
+
+@export_subgroup("Convoy Round End 1.0.7")
+## 1.0.7: off = no time limit. The round ends when every Attack Drone and Breacher is
+## destroyed, every support ship is lost, or (below) every Interceptor is lost.
+@export var protect_timer_end: bool = true
+## With the time limit off, a hidden safety limit still ends a stuck round (seconds).
+@export_range(60.0, 900.0) var protect_safety_seconds: float = 300.0
+## 1.0.7: when every Interceptor is lost and none are left to launch, the convoy has no
+## defense: the round ends as a total loss (every support ship lost, no bonus).
+@export var protect_interceptors_lost_end: bool = false
+@export_subgroup("Convoy Breacher 1.0.7")
+## 1.0.7: Breachers join the round. Each jumps in partway through, flies to a support ship,
+## latches on and drains its hull until an Interceptor destroys it. Off = no Breacher.
+@export var protect_breachers: bool = false
+## Breachers per round (Hard adds Hard Extra from set 2 on).
+@export_range(0, 3) var protect_breacher_count: int = 1
+@export_range(0, 3) var hard_protect_breacher_extra: int = 1
+## Seconds into the round before each Breacher jumps in (random in this range).
+@export_range(0.0, 60.0) var protect_breacher_delay_min: float = 8.0
+@export_range(0.0, 60.0) var protect_breacher_delay_max: float = 16.0
+@export_range(0.01, 0.2) var protect_breacher_speed: float = 0.085
+## Seconds one latched Breacher alone takes to drain a full-hull ship on Normal
+## (Easy x1.3, Hard x0.75; ship toughness applies).
+@export_range(4.0, 120.0) var protect_breacher_drain_seconds: float = 26.0
+## Interceptor hits a Breacher takes before it is destroyed.
+@export_range(1, 20) var protect_breacher_hits: int = 6
+@export_subgroup("Convoy Sounds 1.0.7")
+## Rapid-fire burst for drone bursts and Interceptor hits, a clamp when a Breacher latches
+## on, and a pulsing drain hum while one is attached. Round only.
+@export var protect_convoy_sounds: bool = false
+@export_range(-40.0, 0.0) var protect_rapid_fire_volume_db: float = -20.0
+@export_range(-40.0, 0.0) var protect_breacher_latch_volume_db: float = -12.0
+@export_range(-40.0, 0.0) var protect_breacher_drain_volume_db: float = -18.0
 
 @export_group("Siege Ship")
 @export var siege_enabled: bool = true
@@ -747,10 +842,12 @@ var evade_outside := 0
 @export var missile_bonus_offer_each_set: bool = true
 ## 0.1.2: when the second missile bonus is earned during a fight, the current bonus
 ## stays in use and the pick prompt waits until the wave (or Protect the fleet round)
-## is cleared. Off = the prompt opens at once, mid-fight.
-@export var missile_bonus_pick_after_wave: bool = false
-## Status line shown when the pick is held for the end of the wave.
-@export var missile_bonus_wait_line: String = "%s MISSILE BONUS EARNED | PICK AFTER THIS WAVE"
+## is cleared. Off = the prompt opens at once, mid-fight. 1.0.6: on by default, and it
+## also covers the Bonus Sweep, so the pick is never offered during a battle round.
+@export var missile_bonus_pick_after_wave: bool = true
+## Status line shown when the pick is held for the end of the round. 1.0.6: names the
+## bonus just earned (1.0.5 and earlier named the one already in use).
+@export var missile_bonus_wait_line: String = "%s MISSILE EARNED | PICK YOUR BONUS AFTER THIS ROUND"
 
 @export_group("EMP Defense")
 ## 1.06: USE EMP appears in the middle of the ship while a Breacher hacks and
@@ -825,9 +922,11 @@ var evade_outside := 0
 @export_group("Interceptor Launch")
 @export_range(1, 12) var max_interceptors: int = 6
 @export_range(1, 4) var interceptors_per_launch: int = 2
+## 1.0.5: after a launch, Interceptors that were already ready wait this long before the
+## next launch (ships still counting down keep their own countdown).
 @export_range(1.0, 15.0) var launch_cooldown_seconds: float = 4.0
-## 1.1.0: after a Interceptor lands, LAUNCH INTERCEPTORS waits this long (each landing restarts it,
-## so it unlocks this long after the last Interceptor of a group lands). Auto Launch waits too.
+## 1.0.5: after an Interceptor lands, that Interceptor waits this long before it is ready
+## again. Each Interceptor has its own wait; a landing never restarts another one's wait.
 @export_range(0.0, 20.0) var interceptor_recovery_seconds: float = 3.0
 @export_range(10.0, 120.0) var sortie_seconds: float = 45.0
 
@@ -918,7 +1017,6 @@ var arrival_player: AudioStreamPlayer
 var spawn_countdown: float = 0.8
 var wave_countdown: float = 9.0
 var launch_player: AudioStreamPlayer
-var launch_cooldown_remaining: float = 0.0
 var launch_sound_count: int = 0
 var intercepted_count: int = 0
 var impacts: Array[Dictionary] = []
@@ -1000,7 +1098,6 @@ var nuclear_alert_count: int = 0
 var nuclear_beep_count: int = 0
 var prox_burst_remaining: float = 0.0
 var prox_cooldown_remaining: float = 0.0
-var gunship_cooldown_remaining: float = 0.0
 var nuclear_alarm_remaining: float = 0.0
 var battle_time: float = 0.0
 ## 1.2.4: how many times Keep Play In Wedge moved a contact back inside.
@@ -1094,8 +1191,11 @@ var stealth_recovered: int = 0
 ## 1.1.0 state: Attack Drone shots at the Stealth Interceptor, landing pauses and nuke speeds.
 var stealth_shots_taken: int = 0
 var stealth_pursuits: int = 0
-var interceptor_recovery_remaining: float = 0.0
-var gunship_recovery_remaining: float = 0.0
+## 1.0.5: one entry per Interceptor / Gunship in the hangar that is not ready yet:
+## {"left": seconds, "why": "landing" or "launch"}. Ships in the hangar without an
+## entry are ready. (Replaces the shared launch cooldown and landing pause.)
+var interceptor_waits: Array[Dictionary] = []
+var gunship_waits: Array[Dictionary] = []
 var interceptor_recovery_holds: int = 0
 var gunship_recovery_holds: int = 0
 var auto_all_gunship_launches: int = 0
@@ -1182,6 +1282,29 @@ var protect_tick_player: AudioStreamPlayer
 var protect_attacked_player: AudioStreamPlayer
 var protect_critical_player: AudioStreamPlayer
 var protect_medium_boom_player: AudioStreamPlayer
+## 1.0.7 Protect the convoy state.
+var protect_rng := RandomNumberGenerator.new()
+var protect_breachers_total: int = 0
+var protect_breachers_spawned: int = 0
+var protect_breachers_destroyed: int = 0
+var protect_breacher_times: Array[float] = []
+var protect_breacher_latches: int = 0
+var protect_bursts: int = 0
+var protect_burst_losses: int = 0
+var protect_evasions: int = 0
+var tracers: Array = []
+var protect_rapid_player: AudioStreamPlayer
+var protect_latch_player: AudioStreamPlayer
+var protect_drain_player: AudioStreamPlayer
+var protect_last_rapid_at: float = -100.0
+var protect_tender_switches: int = 0
+## 1.0.7.2: a tender is due this round and waits for the first damaged ship.
+var protect_tender_waiting: bool = false
+var protect_tender_launches: int = 0
+var protect_tenders_lost: int = 0
+var protect_tenders_landed: int = 0
+## 1.0.7.2: points scored for Attack Drone and Breacher kills this round (kept whatever the outcome).
+var protect_kill_points: int = 0
 var _protect_label_rects: Array[Rect2] = []
 ## Extra Interceptors or Gunships still out when their boost ends; the limit tapers as they land.
 var interceptor_limit_hold: int = 0
@@ -1293,13 +1416,11 @@ func _process(delta: float) -> void:
 	_update_emp_offer()
 	_update_automation()
 	_update_interceptor_squadrons()
-	gunship_cooldown_remaining = maxf(0.0, gunship_cooldown_remaining - delta)
-	interceptor_recovery_remaining = maxf(0.0, interceptor_recovery_remaining - delta)
-	gunship_recovery_remaining = maxf(0.0, gunship_recovery_remaining - delta)
+	_tick_waits(gunship_waits, gunships_in_hangar(), delta)
+	_tick_waits(interceptor_waits, interceptors_in_hangar(), delta)
 	_update_repair(delta)
 	_update_rapid_repair(delta)
 	_update_klaxon()
-	launch_cooldown_remaining = maxf(0.0, launch_cooldown_remaining - delta)
 	jump_recharge_remaining = maxf(0.0, jump_recharge_remaining - delta)
 	safe_remaining = maxf(0.0, safe_remaining - delta)
 	status_remaining = maxf(0.0, status_remaining - delta)
@@ -1547,7 +1668,7 @@ func _update_drone(drone: Dictionary, delta: float) -> void:
 	var best := INF
 	for other in contacts:
 		var returning_interceptor: bool = Icons.is_interceptor(other.kind) and other.get("phase", "") == "return"
-		var fighter: bool = fighter_losses_enabled and (Icons.is_interceptor(other.kind) or other.kind == "gunship") and other.get("phase", "") != "launch"
+		var fighter: bool = fighter_losses_enabled and (Icons.is_interceptor(other.kind) or (other.kind == "gunship" and not is_tender(other))) and other.get("phase", "") != "launch"
 		# 1.1.0: a revealed Stealth Interceptor is hunted by _drone_focus_stealth (above).
 		if returning_interceptor or fighter:
 			var gap: float = drone.position.distance_to(other.position)
@@ -1617,6 +1738,8 @@ func display_color(contact: Dictionary) -> Color:
 	elif is_returning(contact):
 		color = color.lerp(Color.WHITE, clampf(returning_lighten, 0.0, 0.8))
 		color.a = 0.55 + 0.45 * (0.5 + 0.5 * cos(TAU * returning_flash_hz * battle_time))
+	elif contact.kind == "convoy_breacher" and contact.get("breach_state", "") == "latched":
+		color.a = 1.0 if int(battle_time * hacking_flash_hz * 2.0) % 2 == 0 else 0.22
 	elif contact.kind == "breacher" and contact.get("phase", "") in ["hacking", "draining"]:
 		color.a = 1.0 if int(battle_time * hacking_flash_hz * 2.0) % 2 == 0 else 0.22
 	elif contact.kind == "breacher" and contact.get("phase", "") == "emp":
@@ -1793,7 +1916,7 @@ func request_jump() -> bool:
 	jump_player.volume_db = jump_volume_db
 	jump_player.play()
 	own_fire_remaining = own_missile_interval
-	launch_cooldown_remaining = 0.0
+	_clear_waits(interceptor_waits, "launch")
 	jump_recharge_remaining = maxf(1.0, jump_recharge_seconds)
 	jump_rebuilding_after_breach = false
 	safe_remaining = maxf(1.0, post_jump_safe_seconds)
@@ -1823,8 +1946,8 @@ func reset_battle() -> void:
 	stealth_recovered = 0
 	stealth_shots_taken = 0
 	stealth_pursuits = 0
-	interceptor_recovery_remaining = 0.0
-	gunship_recovery_remaining = 0.0
+	interceptor_waits.clear()
+	gunship_waits.clear()
 	interceptor_recovery_holds = 0
 	gunship_recovery_holds = 0
 	auto_all_gunship_launches = 0
@@ -1904,7 +2027,6 @@ func reset_battle() -> void:
 	battery_idle = 0.0
 	interceptors_lost = 0
 	drones_docked = 0
-	gunship_cooldown_remaining = 0.0
 	nuclear_alarm_remaining = 0.0
 	battle_time = 0.0
 	nuclear_alert_count = 0
@@ -1952,7 +2074,6 @@ func reset_battle() -> void:
 	prox_active = false
 	jump_recharge_remaining = 0.0 if jump_starts_ready else jump_recharge_seconds
 	safe_remaining = 0.0
-	launch_cooldown_remaining = 0.0
 	missile_hits = 0
 	prox_kills = 0
 	missile_intercepts = 0
@@ -1991,7 +2112,7 @@ func size_for_kind(kind: String) -> float:
 		return carrier_icon_scale
 	if kind == "siege_ship":
 		return siege_icon_scale
-	if kind == "breacher":
+	if kind == "breacher" or kind == "convoy_breacher":
 		return small_ship_icon_scale * 1.20
 	if kind == "interceptor" or kind == "drone" or kind == "stealth_interceptor":
 		return small_ship_icon_scale
@@ -2007,15 +2128,21 @@ func count_interceptors() -> int:
 func count_tracks() -> int:
 	return count_kind("carrier") + count_kind("unknown") + count_kind("drone") + count_kind("breacher") + count_kind("siege_ship")
 
+## 1.0.5: launches the Interceptors that are ready, up to Interceptors Per Launch. If only
+## one is ready it goes alone. Ready ships left behind wait the launch cooldown; ships
+## still counting down keep their own countdown.
 func launch_interceptors() -> int:
-	if is_defeated() or safe_remaining > 0.0 or interceptor_ready_in() > 0.0:
+	if is_defeated() or safe_remaining > 0.0:
+		return 0
+	var ready := interceptors_ready()
+	if ready <= 0:
 		return 0
 	var launched := 0
-	for index in range(mini(interceptors_per_launch, maxi(0, interceptor_limit() - count_interceptors()))):
+	for index in range(mini(interceptors_per_launch, ready)):
 		if not _spawn_interceptor("interceptor", false).is_empty():
 			launched += 1
 	if launched > 0:
-		launch_cooldown_remaining = launch_cooldown_seconds
+		_hold_ready(interceptor_waits, interceptors_ready(), launch_cooldown_seconds)
 		_play_launch(launched)
 	return launched
 
@@ -2061,7 +2188,10 @@ func _hostile_target(interceptor: Dictionary, excluded: Array[String]) -> Dictio
 	if not siege.is_empty():
 		return siege
 	# Attack Drones and missiles keep Interceptors busy; they break away for Breachers only when clear.
-	var primary := _interceptor_target_of(interceptor, excluded, ["drone", "missile"])
+	var primary_kinds := ["drone", "missile"]
+	if protect_active() and protect_breachers:
+		primary_kinds.append("convoy_breacher")
+	var primary := _interceptor_target_of(interceptor, excluded, primary_kinds)
 	if not primary.is_empty():
 		return primary
 	var heavy := _interceptor_target_of(interceptor, excluded, ["breacher"])
@@ -2100,13 +2230,19 @@ func _interceptor_target_of(interceptor: Dictionary, excluded: Array[String], ki
 		var candidate: float = interceptor.position.distance_to(other.position)
 		# Hold a central defensive screen instead of chasing freshly launched
 		# fighters beside the distant Enemy Carriers.
-		if other.kind == "drone":
+		if other.kind == "drone" and protect_smart_drones and other.get("phase", "") == "protect":
+			# 1.0.7: in the round, Interceptors defend every support ship, even high on the scope.
+			pass
+		elif other.kind == "drone":
 			if other.position.y > 0.42 and other.get("phase", "") != "return":
 				continue
 			candidate += Vector2(other.position.x, other.position.y).length() * 1.5
 			# Returning Attack Drones are low on fuel and ammunition: easier prey.
 			if other.get("phase", "") == "return":
 				candidate *= 0.5
+		if other.kind == "convoy_breacher":
+			# 1.0.7: a latched Breacher is the top job; one on its way comes next.
+			candidate *= 0.25 if other.get("breach_state", "") == "latched" else 0.6
 		if other.kind == "breacher":
 			if other.position.y > 0.42:
 				continue
@@ -2119,7 +2255,7 @@ func _interceptor_target_of(interceptor: Dictionary, excluded: Array[String], ki
 		elif squadrons_split_to_engage:
 			# 1.07: spread out over targets squadron mates are not already chasing.
 			var claims: int = interceptor_claims.get(other.id, 0)
-			if other.kind in ["breacher", "siege_ship"]:
+			if other.kind in ["breacher", "siege_ship", "convoy_breacher"]:
 				if claims >= max_interceptors_per_tough_target:
 					candidate *= squadron_spread_penalty
 			elif claims >= 1:
@@ -2189,6 +2325,13 @@ func _update_interceptors(delta: float) -> void:
 					interceptor.res_fire_remaining = maxf(0.5, interceptor_siege_hit_interval) * fire_interval_factor()
 				continue
 			if interceptor.position.distance_to(target.position) <= 0.05:
+				if target.kind == "convoy_breacher":
+					if interceptor.heavy_fire_remaining <= 0.0:
+						interceptor.heavy_fire_remaining = 0.7 * fire_interval_factor()
+						if _hit_convoy_breacher(interceptor, target):
+							removed.append(target.id)
+							interceptor.target_id = ""
+					continue
 				if target.kind == "breacher":
 					if interceptor.heavy_fire_remaining <= 0.0:
 						_hit_breacher(target)
@@ -2303,6 +2446,7 @@ func _draw() -> void:
 			continue
 		_draw_contact(contact, font)
 	_draw_interceptor_squadrons(font)
+	_draw_convoy_effects()
 	_draw_explosions()
 	# 1.2.0: rest tally above the rings and ships, below missiles still in flight.
 	_draw_rest_tally(font)
@@ -2317,7 +2461,7 @@ const PROJECTILE_KINDS := ["missile", "own_missile", "gunship_missile", "nuke", 
 func contact_tag(contact: Dictionary) -> String:
 	var text: String = contact.id
 	if contact.get("faction", "") == "civilian":
-		text = "CIVILIAN %d%%" % ceili(100.0 * clampf(float(contact.get("hull", 1.0)), 0.0, 1.0))
+		text = "SUPPORT %d%%" % ceili(100.0 * clampf(float(contact.get("hull", 1.0)), 0.0, 1.0))
 	elif contact.kind == "unknown":
 		text = "IDENTIFYING"
 	elif contact.kind == "carrier":
@@ -2328,6 +2472,8 @@ func contact_tag(contact: Dictionary) -> String:
 		text = "NUCLEAR"
 		if contact.has("nuke_hits") and contact.nuke_hits < contact.nuke_max_hits:
 			text += " %d%%" % ceili(100.0 * contact.nuke_hits / contact.nuke_max_hits)
+	elif contact.kind == "convoy_breacher":
+		text = "HULL DRAIN" if contact.get("breach_state", "") == "latched" else "BREACHER"
 	elif contact.kind == "breacher":
 		text = "BREACHER"
 		if contact.phase == "hacking":
@@ -2354,7 +2500,9 @@ func contact_tag(contact: Dictionary) -> String:
 	return text
 
 func public_craft_name(contact: Dictionary) -> String:
-	if contact.get("phase", "") == "protect_repair":
+	if is_tender(contact):
+		if protect_tender_hull and float(contact.get("hull", 1.0)) < 0.995:
+			return "REPAIR TENDER %d%%" % ceili(100.0 * clampf(float(contact.hull), 0.0, 1.0))
 		return "REPAIR TENDER"
 	return {"interceptor": "INTERCEPTOR", "drone": "ATTACK DRONE",
 		"gunship": "GUNSHIP"}.get(contact.kind, "CONTACT")
@@ -2403,7 +2551,7 @@ func _draw_contact(contact: Dictionary, font: Font) -> void:
 		draw_polyline(arrow, color, 1.0, true)
 		draw_line(point - direction * 5.0, point - direction * 12.0, Color(color, 0.45), 1.0, true)
 	else:
-		var icon_kind: String = "repair_tender" if contact.get("phase", "") == "protect_repair" else contact.kind
+		var icon_kind: String = "repair_tender" if is_tender(contact) else contact.kind
 		Icons.draw_icon(self, icon_kind, point, marker_scale, color)
 	if show_labels:
 		var font_size := contact_font_size(contact.kind)
@@ -2900,13 +3048,15 @@ func nuclear_beep_interval() -> float:
 	var fraction := clampf(distance / maxf(0.01, nearest.get("launch_distance", distance)), 0.0, 1.0)
 	return lerpf(nuclear_beep_near_seconds, maxf(nuclear_beep_near_seconds, nuclear_beep_far_seconds), fraction)
 
+## 1.0.5: launches one ready Gunship. Other ready Gunships then wait the launch cooldown;
+## Gunships still counting down keep their own countdown.
 func launch_gunship() -> int:
-	if gunship_ready_in() > 0.0:
+	if gunships_ready() <= 0:
 		return 0
 	var id := _spawn_gunship()
 	if id.is_empty():
 		return 0
-	gunship_cooldown_remaining = maxf(1.0, gunship_launch_cooldown)
+	_hold_ready(gunship_waits, gunships_ready(), maxf(1.0, gunship_launch_cooldown))
 	return 1
 
 func _spawn_gunship() -> String:
@@ -2972,12 +3122,13 @@ func _gunship_target(gunship: Dictionary, removed: Array[String]) -> Dictionary:
 	return chosen
 
 func _update_gunships(delta: float) -> void:
+	_update_tender_return(delta)
 	var removed: Array[String] = []
 	for gunship in contacts.duplicate():
 		if gunship.kind != "gunship":
 			continue
 		# 1.2.9: the Protect the fleet repair Gunship flies its own route.
-		if gunship.get("phase", "") == "protect_repair":
+		if is_tender(gunship):
 			continue
 		gunship.fire_timer = maxf(0.0, gunship.fire_timer - delta)
 		gunship.heavy_fire_remaining = maxf(0.0, gunship.get("heavy_fire_remaining", 0.0) - delta)
@@ -3053,7 +3204,7 @@ func _fire_flak(base: Dictionary) -> String:
 	var target: Dictionary = {}
 	var nearest := carrier_flak_range
 	for contact in contacts:
-		if contact.kind == "gunship":
+		if contact.kind == "gunship" and not is_tender(contact):
 			var distance: float = base.position.distance_to(contact.position)
 			if distance < nearest:
 				nearest = distance
@@ -3079,6 +3230,7 @@ func _update_special_projectiles(delta: float) -> void:
 				nuclear_hits += 1
 				impacts.append({"position": own_ship_position, "age": 0.0})
 				_explode(own_ship_position, "nuke_impact")
+				nuke_hit_ship.emit(true)
 				apply_damage(nuclear_damage * damage_factor())
 				if is_defeated():
 					return
@@ -3107,6 +3259,7 @@ func _award_destroyed(contact: Dictionary) -> void:
 	match contact.kind:
 		"drone": points = fighter_points
 		"breacher": points = breacher_points
+		"convoy_breacher": points = breacher_points
 		"nuke": points = nuclear_points
 		"carrier": points = carrier_points
 		"siege_ship": points = siege_points
@@ -3117,10 +3270,14 @@ func _award_destroyed(contact: Dictionary) -> void:
 	if contact.get("phase", "") == "protect":
 		protect_drones_destroyed += 1
 	_destruction_effect(contact)
+	if contact.get("phase", "") in ["protect", "protect_breacher"]:
+		protect_kill_points += points_for(points)
 	_add_points(points_for(points))
 
 ## 1.08: counts one destroyed enemy for the battle stats.
 func _count_kill(kind: String) -> void:
+	if kind == "convoy_breacher":
+		kind = "breacher"
 	if kind in KILL_KINDS:
 		kills[kind] = int(kills.get(kind, 0)) + 1
 
@@ -3211,15 +3368,16 @@ func _offer_missile_bonus(current: String, set_offer: bool) -> void:
 	missile_bonus_pick = current
 	if missile_bonus_offer_open:
 		return
-	if not set_offer and missile_bonus_pick_after_wave and wave_system_active() and wave_phase in ["assault", "protect"]:
-		# Mid-fight: keep the current bonus and ask once the wave is cleared.
+	var other := "DOUBLE" if current == "RAPID" else "RAPID"
+	if not set_offer and missile_bonus_pick_after_wave and wave_system_active() and wave_phase in ["assault", "protect", "sweep"]:
+		# Mid-fight: keep the current bonus and ask once the round is over.
 		missile_bonus_offer_waiting = true
 		missile_bonus_waits += 1
-		_set_status(missile_bonus_wait_line % current, 4.0)
-		call_deferred("_set_status", missile_bonus_wait_line % current, 4.0)
-		battle_event.emit("missile bonus pick held for the end of the wave | has %s" % current)
+		var line := (missile_bonus_wait_line % other) if missile_bonus_wait_line.contains("%s") else missile_bonus_wait_line
+		_set_status(line, 4.0)
+		call_deferred("_set_status", line, 4.0)
+		battle_event.emit("missile bonus pick held for the end of the round | has %s, earned %s" % [current, other])
 		return
-	var other := "DOUBLE" if current == "RAPID" else "RAPID"
 	missile_bonus_offers += 1
 	if set_offer:
 		missile_bonus_set_offers += 1
@@ -3365,6 +3523,7 @@ func _battery_try_nuke(projectile: Dictionary) -> bool:
 	_remove_contact(projectile.id)
 	var splash := nuclear_damage * damage_factor() * battery_nuke_splash
 	battery_splash_damage += splash
+	nuke_hit_ship.emit(false)
 	apply_damage(splash)
 	if not is_defeated():
 		_set_status("DEFENSE SHIELD: NUKE DESTROYED | SPLASH DAMAGE", 4.0)
@@ -3466,13 +3625,16 @@ func _update_auto_launch() -> void:
 		var wanted := mini(gunship_limit(), nukes) if nukes > 0 else (1 if count_kind("carrier") > 0 else 0)
 		if auto_all_gunships_nukes > 0 and nukes >= auto_all_gunships_nukes and gunships < gunship_limit():
 			# 1.1.0: several nukes on screen: every available Gunship launches at once.
-			# The launch cooldown is skipped; the landing pause still applies.
-			if gunship_recovery_remaining <= 0.0:
+			# The launch cooldown is skipped; the landing pause still applies. 1.0.5: each
+			# Gunship's own landing wait still applies, so ones that just landed stay behind.
+			_clear_waits(gunship_waits, "launch")
+			var ready := gunships_ready()
+			if ready > 0:
 				var sent := 0
-				while count_kind("gunship") < gunship_limit() and not _spawn_gunship().is_empty():
+				while sent < ready and not _spawn_gunship().is_empty():
 					sent += 1
 				if sent > 0:
-					gunship_cooldown_remaining = maxf(1.0, gunship_launch_cooldown)
+					_hold_ready(gunship_waits, gunships_ready(), maxf(1.0, gunship_launch_cooldown))
 					auto_gunship_launches += sent
 					auto_all_gunship_launches += 1
 					battle_event.emit("auto launch: all Gunships (%d) for %d nukes" % [sent, nukes])
@@ -4727,26 +4889,85 @@ static func make_stealth_ready_sound() -> AudioStreamWAV:
 	stream.data = data
 	return stream
 
-# 1.1.0 LANDING PAUSE AND NUKE SPEED ------------------------------------------
+# 1.0.5 PER-SHIP READINESS (was the 1.1.0 shared landing pause) AND NUKE SPEED -------
 
-## Seconds until LAUNCH INTERCEPTORS is ready (the longer of the launch cooldown and the
-## landing pause).
+## Interceptors not out on the scope (ready or counting down).
+func interceptors_in_hangar() -> int:
+	return maxi(0, interceptor_limit() - count_interceptors())
+
+## Gunships not out on the scope (ready or counting down).
+func gunships_in_hangar() -> int:
+	return maxi(0, gunship_limit() - count_kind("gunship"))
+
+## Interceptors that can launch right now.
+func interceptors_ready() -> int:
+	return maxi(0, interceptors_in_hangar() - interceptor_waits.size())
+
+## Gunships that can launch right now.
+func gunships_ready() -> int:
+	return maxi(0, gunships_in_hangar() - gunship_waits.size())
+
+## 1.0.6: how many Interceptors the next LAUNCH press sends (at most
+## interceptors_per_launch, normally 2). The button shows this, not the whole hangar.
+func interceptors_next_launch() -> int:
+	return mini(maxi(1, interceptors_per_launch), interceptors_ready())
+
+## 1.0.6: how many Gunships the next LAUNCH press sends (one at a time).
+func gunships_next_launch() -> int:
+	return mini(1, gunships_ready())
+
+## Seconds until the next Interceptor is ready. 0 when one is ready now, or when none
+## are in the hangar (all deployed: nothing to wait for).
 func interceptor_ready_in() -> float:
-	return maxf(launch_cooldown_remaining, interceptor_recovery_remaining)
+	return _next_ready_in(interceptor_waits, interceptors_ready(), interceptors_in_hangar())
 
-## Seconds until LAUNCH GUNSHIP is ready (the longer of the launch cooldown and the
-## landing pause).
+## Seconds until the next Gunship is ready (0 when one is ready or all are deployed).
 func gunship_ready_in() -> float:
-	return maxf(gunship_cooldown_remaining, gunship_recovery_remaining)
+	return _next_ready_in(gunship_waits, gunships_ready(), gunships_in_hangar())
 
-## A Interceptor or Gunship has landed: hold its launch button for the recovery time.
-## Each landing restarts the pause.
+func _next_ready_in(waits: Array[Dictionary], ready: int, hangar: int) -> float:
+	if ready > 0 or hangar <= 0 or waits.is_empty():
+		return 0.0
+	var soonest := INF
+	for wait in waits:
+		soonest = minf(soonest, float(wait.left))
+	return maxf(0.0, soonest)
+
+## Count down each waiting ship; a ship whose wait ends is ready. If the hangar got
+## smaller (a boost ended), the longest waits go first.
+func _tick_waits(waits: Array[Dictionary], hangar: int, delta: float) -> void:
+	for index in range(waits.size() - 1, -1, -1):
+		waits[index].left = float(waits[index].left) - delta
+		if waits[index].left <= 0.0:
+			waits.remove_at(index)
+	while waits.size() > maxi(0, hangar):
+		var longest := 0
+		for index in range(waits.size()):
+			if waits[index].left > waits[longest].left:
+				longest = index
+		waits.remove_at(longest)
+
+## After a launch: the given number of ready ships wait Seconds before the next launch.
+func _hold_ready(waits: Array[Dictionary], count: int, seconds: float) -> void:
+	if seconds <= 0.0:
+		return
+	for index in range(maxi(0, count)):
+		waits.append({"left": seconds, "why": "launch"})
+
+## Remove waits of one kind ("launch" or "landing"), or all with "".
+func _clear_waits(waits: Array[Dictionary], why: String = "") -> void:
+	for index in range(waits.size() - 1, -1, -1):
+		if why == "" or waits[index].why == why:
+			waits.remove_at(index)
+
+## An Interceptor or Gunship has landed: that ship waits its recovery time before it is
+## ready again. Other ships keep their own countdowns (1.0.5).
 func _hold_after_landing(kind: String) -> void:
 	if kind == "interceptor" and interceptor_recovery_seconds > 0.0:
-		interceptor_recovery_remaining = interceptor_recovery_seconds
+		interceptor_waits.append({"left": interceptor_recovery_seconds, "why": "landing"})
 		interceptor_recovery_holds += 1
 	elif kind == "gunship" and gunship_recovery_seconds > 0.0:
-		gunship_recovery_remaining = gunship_recovery_seconds
+		gunship_waits.append({"left": gunship_recovery_seconds, "why": "landing"})
 		gunship_recovery_holds += 1
 
 ## Speed bonus for a new Enemy Carrier nuke: 0 to Nuke Speed Random Max, even on Easy and
@@ -5067,7 +5288,7 @@ func next_wave_number() -> int:
 
 func inbound_message() -> String:
 	if wave_next_phase == "protect":
-		return "PROTECT THE FLEET INBOUND | CIVILIAN SHIPS UNDER ATTACK DRONE ATTACK | INTERCEPTORS ONLY"
+		return "PROTECT THE CONVOY INBOUND | SUPPORT SHIPS UNDER ATTACK DRONE ATTACK | INTERCEPTORS ONLY"
 	if wave_next_phase == "sweep":
 		return "BONUS SWEEP INBOUND | ATTACK DRONES CROSSING | NO MISSILES"
 	var number := wave + 1
@@ -5123,7 +5344,7 @@ func _clear_wave() -> void:
 	if set_done and missile_bonus_offer_each_set and both_missile_bonuses_earned() and not missile_bonus_offer_open:
 		_offer_missile_bonus(missile_bonus_pick, true)
 
-## 0.1.2: offers a pick held for the end of the wave. True when one was offered.
+## 0.1.2: offers a pick held for the end of the round. True when one was offered.
 func _offer_waiting_missile_bonus() -> bool:
 	if not missile_bonus_offer_waiting:
 		return false
@@ -5369,6 +5590,8 @@ func _end_sweep() -> void:
 	_begin_rest()
 	_set_status("BONUS SWEEP COMPLETE | %s" % last_sweep_result, maxf(2.0, wave_rest_remaining - inbound_seconds))
 	battle_event.emit("bonus sweep complete | %d of %d destroyed | perfect %s | bonus %d" % [sweep_destroyed, sweep_spawned, str(perfect), bonus])
+	# 1.0.6: a missile bonus pick held during the sweep is offered now.
+	_offer_waiting_missile_bonus()
 
 # ------------------------------------------------------------------
 # 1.2.2 Protect the fleet: after each Major engagement the scope is reset and
@@ -5384,7 +5607,7 @@ func protect_active() -> bool:
 
 func next_round_name() -> String:
 	match wave_next_phase:
-		"protect": return "PROTECT THE FLEET"
+		"protect": return "PROTECT THE CONVOY"
 		"sweep": return "BONUS SWEEP"
 	return wave_name(wave + 1)
 
@@ -5452,7 +5675,12 @@ func protect_drones_left() -> int:
 func protect_time_left() -> float:
 	return maxf(0.0, protect_round_seconds - protect_elapsed)
 
+## 1.0.7: Interceptors on the scope plus launches still allowed this round.
+func protect_interceptors_left() -> int:
+	return count_interceptors() + maxi(0, protect_interceptor_total() - protect_interceptors_launched)
+
 func _reset_protect_state() -> void:
+	protect_tender_waiting = false
 	protect_auto_interceptor_launches = 0
 	protect_civilians_total = 0
 	protect_drones_total = 0
@@ -5482,8 +5710,18 @@ func _reset_protect_state() -> void:
 	protect_dogfight_interceptors_lost = 0
 	protect_helps = 0
 	protect_repaired = 0.0
+	protect_kill_points = 0
 	protect_gunship_repaired = 0.0
 	protect_boom_size = ""
+	protect_breachers_total = 0
+	protect_breachers_spawned = 0
+	protect_breachers_destroyed = 0
+	protect_breacher_times.clear()
+	protect_breacher_latches = 0
+	protect_bursts = 0
+	protect_burst_losses = 0
+	protect_evasions = 0
+	tracers.clear()
 
 func _shuffled(values: Array) -> Array:
 	var items := values.duplicate()
@@ -5515,8 +5753,7 @@ func _start_protect() -> void:
 	nuclear_alert_queue.clear()
 	nuclear_alert_contact_id = ""
 	nuclear_alarm_remaining = 0.0
-	launch_cooldown_remaining = 0.0
-	interceptor_recovery_remaining = 0.0
+	interceptor_waits.clear()
 	protect_drones_total = protect_drone_count()
 	var low := clampi(protect_civilians_min, 1, CIVILIAN_KINDS.size())
 	var high := clampi(protect_civilians_max, low, CIVILIAN_KINDS.size())
@@ -5536,7 +5773,19 @@ func _start_protect() -> void:
 	protect_spawn_timer = 0.0
 	_roll_protect_challenges()
 	_ensure_protect_audio()
-	_set_status("PROTECT THE FLEET | %d CIVILIAN SHIPS | %d ATTACK DRONES | INTERCEPTORS ONLY" % [protect_civilians_total, protect_drones_total], 5.0)
+	_ensure_convoy_audio()
+	# 1.0.7: the new round behaviour draws from its own generator, seeded per round.
+	protect_rng.seed = hash([rng.seed, protect_rounds, sets_completed, active_difficulty])
+	if protect_breachers:
+		var breacher_n := protect_breacher_count
+		if clampi(active_difficulty, 0, 2) == 2 and sets_completed >= 2:
+			breacher_n += hard_protect_breacher_extra
+		protect_breachers_total = maxi(0, breacher_n)
+		var lo := minf(protect_breacher_delay_min, protect_breacher_delay_max)
+		var hi := maxf(protect_breacher_delay_min, protect_breacher_delay_max)
+		for index in range(protect_breachers_total):
+			protect_breacher_times.append(protect_rng.randf_range(lo, hi) + index * 8.0)
+	_set_status("PROTECT THE CONVOY | %d SUPPORT SHIPS | %d ATTACK DRONES | INTERCEPTORS ONLY" % [protect_civilians_total, protect_drones_total], 5.0)
 	battle_event.emit("protect the fleet start | %d civilian ships (%s) | %d Attack Drones | kill time %ds" % [
 		protect_civilians_total, ", ".join(protect_civilian_kinds), protect_drones_total, int(civilian_kill_seconds())])
 
@@ -5561,16 +5810,29 @@ func _update_protect(delta: float) -> void:
 		for slot in range(mini(maxi(1, protect_drone_group_size), protect_drones_total - protect_drones_spawned)):
 			_spawn_protect_drone(slot == 0)
 		protect_spawn_timer = maxf(0.2, protect_drone_group_gap)
+	# 1.0.7: Breachers jump in on their time, or at once when every drone is gone.
+	if protect_breachers_spawned < protect_breachers_total:
+		var drones_done := protect_drones_spawned >= protect_drones_total and protect_drones_left() == 0
+		if protect_elapsed >= protect_breacher_times[protect_breachers_spawned] or drones_done:
+			_spawn_convoy_breacher()
+	_update_convoy_breachers(delta)
+	_update_tracers(delta)
 	if civilians_left() == 0:
-		_end_protect("FLEET LOST")
-	elif protect_drones_spawned >= protect_drones_total and protect_drones_left() == 0:
+		_end_protect("SUPPORT FLEET LOST")
+	elif protect_drones_spawned >= protect_drones_total and protect_drones_left() == 0 and protect_breachers_spawned >= protect_breachers_total and convoy_breachers_left() == 0:
 		_end_protect("ATTACK DRONES DESTROYED")
-	elif protect_elapsed >= protect_round_seconds:
+	elif protect_interceptors_lost_end and protect_interceptors_launched > 0 and protect_interceptors_left() == 0:
+		_end_protect("INTERCEPTORS LOST")
+	elif protect_timer_end and protect_elapsed >= protect_round_seconds:
+		_end_protect("TIME")
+	elif not protect_timer_end and protect_elapsed >= protect_safety_seconds:
 		_end_protect("TIME")
 
 func _spawn_protect_drone(announce: bool) -> void:
 	# From the upper edge and the sides of the scope.
 	var angle := rng.randf_range(-0.25, PI + 0.25)
+	if protect_smart_drones:
+		angle = _protect_spread_angle()
 	var start := Vector3(cos(angle) * 0.97, sin(angle) * 0.97, 0.1)
 	var id := _new_id("H")
 	contacts.append({
@@ -5696,6 +5958,10 @@ func _update_protect_drone(drone: Dictionary, delta: float) -> void:
 		drone.hold = float(drone.hold) - delta
 		if drone.hold > 0.0:
 			return
+	# 1.0.7 Smart drones replace the 1.2.9 break-off rules.
+	if protect_smart_drones:
+		_update_smart_drone(drone, delta)
+		return
 	# 1.2.9 Dogfights: a Attack Drone fighting a Interceptor leaves the ships alone.
 	if protect_dogfights and _protect_drone_dogfight(drone, delta):
 		return
@@ -5744,24 +6010,26 @@ func _damage_civilian(ship: Dictionary, amount: float) -> void:
 	_explode(ship.position, "own_craft")
 	protect_boom_size = ""
 	_remove_contact(ship.id)
-	_set_status("CIVILIAN SHIP LOST | %d OF %d LEFT" % [civilians_left(), protect_civilians_total], 3.0)
+	_set_status("SUPPORT SHIP LOST | %d OF %d LEFT" % [civilians_left(), protect_civilians_total], 3.0)
 	battle_event.emit("civilian ship lost (%s) | %d of %d left" % [ship.kind, civilians_left(), protect_civilians_total])
 
 func _end_protect(reason: String, jumped: bool = false) -> void:
 	if wave_phase != "protect":
 		return
 	protect_end_reason = reason
+	# 1.0.7: no Interceptors left = no defense; the whole convoy counts as lost, no bonus.
+	var total_loss := reason == "INTERCEPTORS LOST"
 	var hull_sum := 0.0
 	var survivors := 0
 	for contact in contacts:
 		if contact.get("faction", "") == "civilian":
 			survivors += 1
 			hull_sum += clampf(float(contact.get("hull", 1.0)), 0.0, 1.0)
-	protect_saved = 0 if jumped else survivors
+	protect_saved = 0 if jumped or total_loss else survivors
 	protect_lost = protect_civilians_total - protect_saved
-	protect_hull_kept = roundi(100.0 * hull_sum / survivors) if survivors > 0 and not jumped else 0
+	protect_hull_kept = roundi(100.0 * hull_sum / survivors) if survivors > 0 and not jumped and not total_loss else 0
 	var full := not jumped and protect_saved > 0 and protect_saved == protect_civilians_total
-	var base := 0.0 if jumped else protect_ship_points * hull_sum + (protect_full_fleet_points if full else 0)
+	var base := 0.0 if jumped or total_loss else protect_ship_points * hull_sum + (protect_full_fleet_points if full else 0)
 	last_protect_bonus = points_for(roundi(base))
 	_add_points(last_protect_bonus)
 	wave_bonus_points += last_protect_bonus
@@ -5774,13 +6042,26 @@ func _end_protect(reason: String, jumped: bool = false) -> void:
 			protect_drones_escaped += 1
 			contacts.remove_at(index)
 		elif contact.get("faction", "") == "civilian":
+			if total_loss:
+				_explode(contact.position, "own_craft")
 			contacts.remove_at(index)
 		elif contact.get("phase", "") == "protect_repair":
-			# 1.2.9: the repair Gunship leaves with the civilian ships.
+			if protect_tender_lands and not jumped:
+				# 1.0.7.2: it flies home and lands on your ship.
+				contact.phase = "tender_return"
+				contact.target_id = ""
+			else:
+				# 1.2.9: the repair Gunship leaves with the civilian ships.
+				contacts.remove_at(index)
+		elif contact.get("phase", "") == "protect_breacher":
+			# 1.0.7: a Breacher still here jumps away.
 			contacts.remove_at(index)
 		elif Icons.is_interceptor(contact.kind):
 			contact.phase = "return"
 			contact.target_id = ""
+	tracers.clear()
+	if is_instance_valid(protect_drain_player):
+		protect_drain_player.stop()
 	wave_next_phase = "assault"
 	rest_after_protect = true
 	upcoming_trait = _draw_trait(wave + 1)
@@ -5789,7 +6070,10 @@ func _end_protect(reason: String, jumped: bool = false) -> void:
 	wave_rest_remaining += maxf(0.0, protect_result_extra_seconds)
 	protect_result_started = battle_time
 	_play_protect_result_sound()
-	_set_status("PROTECT THE FLEET COMPLETE | %d OF %d SAVED | +%d" % [protect_saved, protect_civilians_total, last_protect_bonus], maxf(2.0, wave_rest_remaining - inbound_seconds))
+	if total_loss:
+		_set_status("ALL INTERCEPTORS LOST | SUPPORT FLEET LOST | NO CONVOY BONUS", maxf(2.0, wave_rest_remaining - inbound_seconds))
+	else:
+		_set_status("PROTECT THE CONVOY COMPLETE | %d OF %d SAVED | +%d" % [protect_saved, protect_civilians_total, last_protect_bonus], maxf(2.0, wave_rest_remaining - inbound_seconds))
 	battle_event.emit("protect the fleet complete (%s) | saved %d of %d | hull %d%% | Attack Drones destroyed %d of %d, jumped away %d | Interceptors launched %d | bonus %d" % [
 		reason, protect_saved, protect_civilians_total, protect_hull_kept, protect_drones_destroyed, protect_drones_spawned,
 		protect_drones_escaped, protect_interceptors_launched, last_protect_bonus])
@@ -5838,7 +6122,9 @@ func _roll_protect_challenges() -> void:
 			and (maxi(1, sets_completed) >= protect_gunship_from_set or active_difficulty == 2):
 		var chance := protect_hard_gunship_chance if active_difficulty == 2 else protect_gunship_chance
 		gunship = rng.randf() < clampf(chance, 0.0, 1.0)
-	if gunship:
+	if gunship and protect_tender_launch_when_hit:
+		protect_tender_waiting = true
+	elif gunship:
 		_spawn_repair_tender()
 	battle_event.emit("protect the fleet challenges | %s%s" % [protect_challenge_names(), " | repair Gunship" if gunship else ""])
 
@@ -5848,20 +6134,99 @@ func _protect_group_end(index: int) -> int:
 		return protect_drones_total
 	return mini(protect_drones_total, ceili(float(protect_drones_total) * float(index + 1) / float(protect_wave_groups)))
 
-func _spawn_repair_tender() -> void:
+func _spawn_repair_tender(from_ship: bool = false) -> void:
 	var at := own_ship_position + Vector3(0.0, 0.1, 0.0)
+	if from_ship:
+		# 1.0.7.2: launches from your ship like a Gunship.
+		at = launch_origin(0.0)
+	elif protect_tender_jump_in:
+		# 1.0.7 option: jumps in beside the convoy, at the middle of the ships.
+		var centre := Vector3.ZERO
+		var n := 0
+		for ship in contacts:
+			if ship.get("faction", "") == "civilian":
+				centre += ship.position
+				n += 1
+		if n > 0:
+			at = centre / n
 	contacts.append({"id": _new_id("R"), "kind": "gunship", "faction": "friendly", "position": at,
 		"start": at, "finish": at, "age": 0.0, "progress": 0.0, "phase": "protect_repair",
 		"velocity": Vector3.ZERO, "lane": 0.0, "fire_timer": 0.0, "target_id": "",
-		"health": 1, "max_health": 1, "patrol_angle": 0.0})
+		"health": 1, "max_health": 1, "patrol_angle": 0.0, "hull": 1.0})
 	protect_gunship_rounds += 1
+	if from_ship:
+		protect_tender_launches += 1
 	_set_status("REPAIR TENDER LAUNCHED | FIXING DAMAGED SHIPS", 3.0)
+	battle_event.emit("repair tender launched%s" % (" from your ship" if from_ship else ""))
+
+## 1.0.7.2: the repair tender, during the round or flying home after it.
+func is_tender(contact: Dictionary) -> bool:
+	return contact.get("phase", "") in ["protect_repair", "tender_return"]
+
+## 1.0.7.2: where an idle tender waits: by the support ships, leaning toward the drones.
+func _tender_wait_point(gunship: Dictionary) -> Vector3:
+	var ships := Vector3.ZERO
+	var n := 0
+	var drones := Vector3.ZERO
+	var d := 0
+	for contact in contacts:
+		if contact.get("faction", "") == "civilian":
+			ships += contact.position
+			n += 1
+		elif contact.get("phase", "") == "protect" and contact.kind == "drone":
+			drones += contact.position
+			d += 1
+	if n == 0:
+		return own_ship_position + Vector3(0.0, 0.12, 0.0)
+	var at := ships / n
+	if d > 0:
+		at = at.lerp(drones / d, 0.25)
+	var turn := float(gunship.get("age", 0.0)) * 0.5
+	at += Vector3(cos(turn), sin(turn), 0.0) * 0.05
+	at.z = 0.03
+	return at
+
+## 1.0.7.2: Attack Drones attacking close to the tender wear down its hull like the
+## biggest support ship's. True when it is destroyed.
+func _damage_tender(gunship: Dictionary, delta: float) -> bool:
+	if not protect_tender_hull:
+		return false
+	var hits := 0
+	for drone in contacts:
+		if drone.get("phase", "") == "protect" and drone.kind == "drone" and str(drone.get("dog_target", "")) == "" \
+				and drone.position.distance_to(gunship.position) <= protect_attack_range:
+			hits += 1
+	if hits == 0:
+		return false
+	var rate := delta / civilian_kill_seconds() * civilian_damage_factor({"kind": "civilian_c"})
+	gunship.hull = float(gunship.get("hull", 1.0)) - rate * hits
+	gunship.flash_t = 0.25
+	if float(gunship.hull) > 0.0:
+		return false
+	_explode(gunship.position, "own_craft")
+	contacts.erase(gunship)
+	protect_tenders_lost += 1
+	_set_status("REPAIR TENDER LOST | NO MORE REPAIRS THIS ROUND", 3.0)
+	battle_event.emit("repair tender destroyed")
+	return true
+
+## 1.0.7.2: a tender that survived the round flies home and lands.
+func _update_tender_return(delta: float) -> void:
+	for gunship in contacts.duplicate():
+		if gunship.get("phase", "") != "tender_return":
+			continue
+		var home := launch_origin(0.0)
+		_steer(gunship, home, protect_tender_speed, delta)
+		if gunship.position.distance_to(home) <= 0.03:
+			contacts.erase(gunship)
+			protect_tenders_landed += 1
+			_set_status("REPAIR TENDER RECOVERED", 3.0)
 
 ## Gunships the player launched (the Protect the fleet repair Gunship is not one).
 func player_gunship_count() -> int:
 	var total := 0
 	for contact in contacts:
-		if contact.kind == "gunship" and contact.get("phase", "") != "protect_repair":
+		if contact.kind == "gunship" and not is_tender(contact):
 			total += 1
 	return total
 
@@ -5897,18 +6262,42 @@ func _update_protect_extras(delta: float) -> void:
 					protect_repaired += gain
 		if float(ship.hull) < 0.98 and not _patch_used_up(ship) and (worst.is_empty() or float(ship.hull) < float(worst.hull)):
 			worst = ship
+	if protect_tender_waiting:
+		for ship in contacts:
+			if ship.get("faction", "") == "civilian" and float(ship.hull) < 1.0 - protect_tender_launch_damage - 0.0001:
+				protect_tender_waiting = false
+				_spawn_repair_tender(true)
+				break
 	var gunship := repair_tender()
 	if gunship.is_empty():
 		return
 	gunship.age = float(gunship.get("age", 0.0)) + delta
+	gunship.flash_t = maxf(0.0, float(gunship.get("flash_t", 0.0)) - delta)
+	if _damage_tender(gunship, delta):
+		return
 	var target := find_contact(gunship.get("target_id", ""))
-	if target.is_empty() or target.get("faction", "") != "civilian" or float(target.hull) >= 0.98 or _patch_used_up(target):
+	var fly_speed := protect_drone_speed * 0.7
+	if protect_tender_smart:
+		fly_speed = protect_tender_speed
+		gunship.retarget_t = float(gunship.get("retarget_t", 0.0)) - delta
+		var invalid: bool = target.is_empty() or target.get("faction", "") != "civilian" or float(target.hull) >= 0.98 or _patch_used_up(target)
+		if invalid or gunship.retarget_t <= 0.0:
+			gunship.retarget_t = protect_tender_retarget_seconds
+			var pick := _tender_pick(gunship, {} if invalid else target)
+			if not pick.is_empty() and str(pick.get("id", "")) != str(gunship.get("target_id", "")):
+				protect_tender_switches += 0 if invalid else 1
+			target = pick
+			gunship.target_id = "" if target.is_empty() else target.id
+	elif target.is_empty() or target.get("faction", "") != "civilian" or float(target.hull) >= 0.98 or _patch_used_up(target):
 		target = worst
 		gunship.target_id = "" if target.is_empty() else target.id
 	if target.is_empty():
-		_steer(gunship, own_ship_position + Vector3(0.0, 0.12, 0.0), protect_drone_speed * 0.6, delta)
+		if protect_tender_stay_near:
+			_steer(gunship, _tender_wait_point(gunship), minf(fly_speed, protect_drone_speed * 0.8), delta)
+		else:
+			_steer(gunship, own_ship_position + Vector3(0.0, 0.12, 0.0), protect_drone_speed * 0.6, delta)
 		return
-	_steer(gunship, target.position + Vector3(0.04, 0.03, 0.0), protect_drone_speed * 0.7, delta)
+	_steer(gunship, target.position + Vector3(0.04, 0.03, 0.0), fly_speed, delta)
 	if gunship.position.distance_to(target.position) < 0.08:
 		var fix := minf(protect_gunship_repair_rate * delta, 1.0 - float(target.hull))
 		if _gunship_patch() > 0.0:
@@ -5970,6 +6359,7 @@ func _protect_interceptor_dogfight(interceptor: Dictionary, target: Dictionary, 
 		return
 	interceptor.drone_fire_remaining = maxf(0.1, drone_interceptor_hit_interval) * fire_interval_factor()
 	protect_dogfight_hits += 1
+	_protect_tracer_burst(interceptor.position, target.position, false)
 	target.interceptor_hits = int(target.get("interceptor_hits", 1)) - 1
 	impacts.append({"position": target.position, "age": 0.0})
 	if target.interceptor_hits > 0:
@@ -6044,6 +6434,9 @@ func _ensure_protect_audio() -> void:
 
 func _play_protect_sound(which: String) -> void:
 	if not protect_round_sounds or not protect_active():
+		return
+	if which in ["rapid_fire", "breacher_latch"]:
+		_play_convoy_sound(which)
 		return
 	var player: AudioStreamPlayer = {"interceptor_hit": protect_tick_player, "ship_attacked": protect_attacked_player,
 		"ship_critical": protect_critical_player}.get(which, null)
@@ -6137,9 +6530,12 @@ func protect_outcome() -> String:
 	return "saved" if protect_saved >= protect_civilians_total else "partial"
 
 func protect_result_title() -> String:
+	if protect_end_reason == "INTERCEPTORS LOST":
+		# 1.0.7.2: say why the convoy was lost.
+		return "ALL INTERCEPTORS LOST"
 	match protect_outcome():
-		"saved": return "FLEET SAVED"
-		"lost": return "FLEET LOST"
+		"saved": return "SUPPORT FLEET SAVED"
+		"lost": return "SUPPORT FLEET LOST"
 	return "%d OF %d SHIPS SAVED" % [protect_saved, protect_civilians_total]
 
 ## True while the bonus and border are in the bright half of the flash (always after the flash time).
@@ -6177,6 +6573,8 @@ func wave_phase_line() -> String:
 		"sweep":
 			return "BONUS SWEEP  |  %d LEFT" % (sweep_drones - sweep_spawned + sweep_left())
 		"protect":
+			if not protect_timer_end:
+				return "ATTACK DRONES LEFT %d  |  INTERCEPTORS %d" % [protect_drones_left(), protect_interceptors_left()]
 			return "ATTACK DRONES LEFT %d  |  %ds" % [protect_drones_left(), ceili(protect_time_left())]
 	return "SET %d  |  ENEMY CARRIERS LEFT %d" % [wave_set_number(), wave_force_left()]
 
@@ -6191,7 +6589,7 @@ func wave_detail_line() -> String:
 	elif wave_phase == "rest":
 		parts.append("NEXT  " + next_round_name())
 	elif wave_phase == "protect":
-		parts.append("CIVILIANS %d / %d" % [civilians_left(), protect_civilians_total])
+		parts.append("SUPPORT SHIPS %d / %d" % [civilians_left(), protect_civilians_total])
 	return "  |  ".join(parts)
 
 ## 1.2.7: the set score multiplier on its own line under the wave detail line.
@@ -6208,12 +6606,18 @@ func rest_tally_lines() -> Array[String]:
 	if rest_after_protect:
 		# 1.2.7: result title, details, the bonus on its own large line, then its label.
 		lines.append(protect_result_title())
-		lines.append("FLEET HULL %d%%  |  ATTACK DRONES DOWN %d OF %d" % [protect_hull_kept, protect_drones_destroyed, protect_drones_spawned])
+		if protect_end_reason == "INTERCEPTORS LOST":
+			lines.append("SUPPORT FLEET LOST  |  ATTACK DRONES DOWN %d OF %d" % [protect_drones_destroyed, protect_drones_spawned])
+		else:
+			lines.append("SUPPORT HULL %d%%  |  ATTACK DRONES DOWN %d OF %d" % [protect_hull_kept, protect_drones_destroyed, protect_drones_spawned])
 		if last_protect_bonus > 0:
 			lines.append("+%d" % last_protect_bonus)
-			lines.append("FLEET BONUS%s" % ("  |  FULL FLEET" if protect_outcome() == "saved" and protect_end_reason != "JUMP" else ""))
+			lines.append("CONVOY BONUS%s" % ("  |  FULL CONVOY" if protect_outcome() == "saved" and protect_end_reason != "JUMP" else ""))
+		elif protect_kill_points > 0:
+			# 1.0.7.2: no bonus, but the kill points earned in the round are kept; say so.
+			lines.append("ENEMY KILLS +%d  |  NO CONVOY BONUS" % protect_kill_points)
 		else:
-			lines.append("NO FLEET BONUS")
+			lines.append("NO CONVOY BONUS")
 	elif rest_after_sweep:
 		lines.append("BONUS SWEEP  %s" % last_sweep_result)
 		if not last_bonus_label.is_empty():
@@ -6274,7 +6678,7 @@ func protect_result_rect(rows: Array) -> Rect2:
 	var height := 24.0
 	for row in rows:
 		height += float(row[3])
-	return Rect2(size.x * 0.5 - 280.0, size.y * 0.5 + radius * rest_tally_offset - 30.0, 560.0, height)
+	return Rect2(size.x * 0.5 - 280.0, size.y * 0.5 + radius * protect_result_offset - 30.0, 560.0, height)
 
 func _draw_protect_result(font: Font, lines: Array[String]) -> void:
 	var rows := protect_result_rows(lines)
@@ -6313,3 +6717,358 @@ func inbound_threats() -> Array:
 	if heavies > 0:
 		rows.append([heavies, "BREACHER INBOUND" if heavies == 1 else "BREACHERS INBOUND", Color(1.0, 0.78, 0.25)])
 	return rows
+
+# ------------------------------------------------------------------
+# 1.0.7 Protect the convoy: smart drones, the convoy Breacher, gunfire lines and sounds.
+# Used in the round only; every switch off = the 1.0.6 round.
+# ------------------------------------------------------------------
+
+## Jump-in angle for a smart drone: of six tries, the one farthest from the drones already here.
+func _protect_spread_angle() -> float:
+	var best_angle := protect_rng.randf_range(-0.25, PI + 0.25)
+	var best_gap := -1.0
+	for attempt in range(6):
+		var angle := protect_rng.randf_range(-0.25, PI + 0.25)
+		var point := Vector2(cos(angle), sin(angle)) * 0.97
+		var nearest := INF
+		for other in contacts:
+			if other.kind == "drone" and other.get("phase", "") == "protect":
+				nearest = minf(nearest, point.distance_to(Vector2(other.position.x, other.position.y)))
+		if nearest > best_gap:
+			best_gap = nearest
+			best_angle = angle
+	return best_angle
+
+## Smart drone ship choice: nearest ship, strongly avoiding ships other drones attack
+## and (when chased) ships near the chaser.
+func _protect_smart_pick(drone: Dictionary, chaser: Dictionary) -> Dictionary:
+	# Gang Up rounds: drones still spread, but less, and lean toward damaged ships.
+	var gang := protect_challenges.has("gang")
+	var pull := protect_split_claim_pull * (0.35 if gang else 1.0)
+	var best: Dictionary = {}
+	var best_score := INF
+	for ship in contacts:
+		if ship.get("faction", "") != "civilian":
+			continue
+		var claims := 0
+		for other in contacts:
+			if other.id != drone.id and other.kind == "drone" and other.get("civ_target", "") == ship.id:
+				claims += 1
+		var rank: float = drone.position.distance_to(ship.position) + pull * claims
+		if gang:
+			rank -= protect_gang_damage_pull * (1.0 - float(ship.get("hull", 1.0)))
+		if not chaser.is_empty():
+			rank -= 0.8 * chaser.position.distance_to(ship.position)
+		if rank < best_score:
+			best_score = rank
+			best = ship
+	return best
+
+func _update_smart_drone(drone: Dictionary, delta: float) -> void:
+	var chaser := _protect_chaser(drone)
+	var chased := not chaser.is_empty()
+	if chased and not drone.get("evading", false):
+		protect_evasions += 1
+		drone.retarget_t = 0.0
+	drone.evading = chased
+	drone.retarget_t = float(drone.get("retarget_t", 0.0)) - delta
+	var target := find_contact(drone.get("civ_target", ""))
+	if target.is_empty() or target.get("faction", "") != "civilian" or (chased and drone.retarget_t <= 0.0):
+		target = _protect_smart_pick(drone, chaser)
+		drone.civ_target = "" if target.is_empty() else target.id
+		drone.retarget_t = protect_retarget_seconds
+		if target.is_empty():
+			return
+	var gap: float = drone.position.distance_to(target.position)
+	drone.patrol_angle = float(drone.get("patrol_angle", 0.0)) + delta * 1.2
+	var aim: Vector3 = target.position
+	if gap < 0.15:
+		aim += Vector3(cos(drone.patrol_angle), sin(drone.patrol_angle), 0.0) * 0.05
+	# Spacing: push away from drones that come too close.
+	if protect_drone_separation > 0.0:
+		var push := Vector3.ZERO
+		for other in contacts:
+			if other.id == drone.id or other.kind != "drone" or other.get("phase", "") != "protect":
+				continue
+			var away: Vector3 = drone.position - other.position
+			away.z = 0.0
+			var d := away.length()
+			if d < protect_drone_separation and d > 0.0001:
+				push += away.normalized() * (protect_drone_separation - d) / protect_drone_separation
+		aim += push * 0.25
+	var speed := protect_drone_speed
+	if chased:
+		# Evade: weave across the chaser's line, pull a little away from it, fly faster.
+		drone.weave_t = float(drone.get("weave_t", 0.0)) + delta * 5.0
+		var line: Vector3 = drone.position - chaser.position
+		line.z = 0.0
+		if line.length() > 0.0001:
+			var side := Vector3(-line.y, line.x, 0.0).normalized()
+			aim += side * sin(drone.weave_t) * protect_evade_weave + line.normalized() * 0.04
+		speed *= protect_evade_speed_factor
+		# Rapid bursts back at the chaser.
+		drone.burst_t = float(drone.get("burst_t", protect_burst_gap * 0.5)) - delta
+		if drone.burst_t <= 0.0 and chaser.position.distance_to(drone.position) <= protect_return_fire_range:
+			drone.burst_t = protect_burst_gap
+			_protect_drone_burst(drone, chaser)
+	_steer(drone, aim, speed, delta)
+	if gap <= protect_attack_range:
+		drone.attack_cooldown = maxf(0.0, drone.get("attack_cooldown", 0.0) - delta)
+		if drone.attack_cooldown <= 0.0:
+			drone.attack_cooldown = 0.6
+			impacts.append({"position": target.position, "age": 0.0})
+			target.flash_t = civilian_hit_flash_seconds
+			_protect_tracer_burst(drone.position, target.position, true, 3)
+			if not target.get("attack_warned", false):
+				target.attack_warned = true
+				_play_protect_sound("ship_attacked")
+		if protect_damage_stack_cap > 0:
+			if float(target.get("stack_key", -1.0)) != protect_elapsed:
+				target.stack_key = protect_elapsed
+				target.stack_n = 0
+			target.stack_n = int(target.stack_n) + 1
+			if target.stack_n > protect_damage_stack_cap:
+				return
+		var factor := protect_evade_damage_factor if chased else 1.0
+		_damage_civilian(target, delta / civilian_kill_seconds() * civilian_damage_factor(target) * factor)
+
+## A drone's burst at the Interceptor chasing it: gunfire lines, the rapid-fire sound and
+## one roll to down the Interceptor.
+func _protect_drone_burst(drone: Dictionary, chaser: Dictionary) -> void:
+	protect_bursts += 1
+	_protect_tracer_burst(drone.position, chaser.position, true)
+	_play_protect_sound("rapid_fire")
+	if protect_rng.randf() < clampf(protect_burst_loss_chance, 0.0, 1.0):
+		protect_burst_losses += 1
+		protect_dogfight_interceptors_lost += 1
+		fighter_losses_by["drone"] += 1
+		battle_event.emit("interceptor lost to an Attack Drone burst in Protect the convoy")
+		_lose_fighter(chaser, "INTERCEPTOR LOST TO ATTACK DRONE FIRE")
+
+## Short gunfire lines from one point toward another (spread slightly, a few rounds).
+func _protect_tracer_burst(from: Vector3, to: Vector3, hostile: bool, rounds: int = -1) -> void:
+	if not protect_tracers:
+		return
+	var n := protect_burst_rounds if rounds < 0 else rounds
+	for index in range(maxi(1, n)):
+		var spread := Vector3(protect_rng.randf_range(-0.006, 0.006), protect_rng.randf_range(-0.006, 0.006), 0.0)
+		tracers.append({"from": from, "to": to + spread, "age": -0.05 * index, "hostile": hostile})
+	if not hostile:
+		_play_protect_sound("rapid_fire")
+	while tracers.size() > 80:
+		tracers.pop_front()
+
+func _update_tracers(delta: float) -> void:
+	for index in range(tracers.size() - 1, -1, -1):
+		tracers[index].age = float(tracers[index].age) + delta
+		if tracers[index].age > 0.18:
+			tracers.remove_at(index)
+
+## Breachers on the scope or still to come.
+func convoy_breachers_left() -> int:
+	var n := 0
+	for contact in contacts:
+		if contact.get("phase", "") == "protect_breacher":
+			n += 1
+	return n
+
+func convoy_breachers_latched() -> int:
+	var n := 0
+	for contact in contacts:
+		if contact.get("phase", "") == "protect_breacher" and contact.get("breach_state", "") == "latched":
+			n += 1
+	return n
+
+func convoy_breacher_drain_seconds() -> float:
+	var seconds := protect_breacher_drain_seconds
+	match clampi(active_difficulty, 0, 2):
+		0: seconds *= 1.3
+		2: seconds *= 0.75
+	return maxf(1.0, seconds)
+
+func _spawn_convoy_breacher() -> void:
+	var angle := protect_rng.randf_range(-0.25, PI + 0.25)
+	var start := Vector3(cos(angle) * 0.97, sin(angle) * 0.97, 0.1)
+	var id := _new_id("H")
+	var hits := maxi(1, protect_breacher_hits)
+	contacts.append({
+		"id": id, "kind": "convoy_breacher", "faction": "hostile", "position": start,
+		"start": start, "finish": start, "age": 0.0, "progress": 0.0,
+		"origin_id": "", "origin_position": start, "target_position": start,
+		"defense_checked": false, "phase": "protect_breacher", "breach_state": "approach",
+		"approach_point": start, "velocity": Vector3.ZERO, "health": hits, "max_health": hits,
+		"civ_target": "", "patrol_angle": 0.0, "hold": protect_jump_in_hold})
+	protect_breachers_spawned += 1
+	_announce_contact(id, "convoy_breacher", "hostile")
+	_set_status("BREACHER INBOUND | IT WILL LATCH ON A SUPPORT SHIP | INTERCEPTORS ENGAGE", 3.0)
+	battle_event.emit("Breacher jumped in to Protect the convoy (%d of %d)" % [protect_breachers_spawned, protect_breachers_total])
+
+## The ship a Breacher goes for: the healthiest one no other Breacher holds, nearest on a tie.
+func _convoy_breacher_pick(breacher: Dictionary) -> Dictionary:
+	var best: Dictionary = {}
+	var best_score := INF
+	for ship in contacts:
+		if ship.get("faction", "") != "civilian":
+			continue
+		var held := 0
+		for other in contacts:
+			if other.id != breacher.id and other.get("phase", "") == "protect_breacher" and other.get("civ_target", "") == ship.id:
+				held += 1
+		var rank: float = -float(ship.get("hull", 1.0)) + 0.4 * breacher.position.distance_to(ship.position) + 2.0 * held
+		if rank < best_score:
+			best_score = rank
+			best = ship
+	return best
+
+func _update_convoy_breachers(delta: float) -> void:
+	var draining := 0
+	for breacher in contacts.duplicate():
+		if breacher.get("phase", "") != "protect_breacher" or find_contact(breacher.id).is_empty():
+			continue
+		if float(breacher.get("hold", 0.0)) > 0.0:
+			breacher.hold = float(breacher.hold) - delta
+			continue
+		var ship := find_contact(breacher.get("civ_target", ""))
+		if ship.is_empty() or ship.get("faction", "") != "civilian":
+			ship = _convoy_breacher_pick(breacher)
+			breacher.civ_target = "" if ship.is_empty() else ship.id
+			breacher.breach_state = "approach"
+			if ship.is_empty():
+				continue
+		var dock: Vector3 = ship.position + Vector3(0.026, -0.026, 0.0)
+		if breacher.breach_state == "approach":
+			_steer(breacher, dock, protect_breacher_speed, delta)
+			if breacher.position.distance_to(dock) <= 0.02:
+				breacher.breach_state = "latched"
+				protect_breacher_latches += 1
+				_play_protect_sound("breacher_latch")
+				_set_status("BREACHER LATCHED ON A SUPPORT SHIP | HULL DRAINING | SEND INTERCEPTORS", 3.5)
+				battle_event.emit("Breacher latched on a support ship (%s)" % ship.kind)
+			continue
+		breacher.position = dock
+		breacher.velocity = ship.get("velocity", Vector3.ZERO)
+		draining += 1
+		ship.drain_t = float(ship.get("drain_t", 0.0)) + delta
+		_damage_civilian(ship, delta / convoy_breacher_drain_seconds() * civilian_damage_factor(ship))
+	_set_drain_sound(draining > 0)
+
+## An Interceptor hit on a convoy Breacher. True when it is destroyed.
+func _hit_convoy_breacher(interceptor: Dictionary, breacher: Dictionary) -> bool:
+	_protect_tracer_burst(interceptor.position, breacher.position, false)
+	breacher.health = int(breacher.get("health", 1)) - 1
+	impacts.append({"position": breacher.position, "age": 0.0})
+	if breacher.health > 0:
+		_play_protect_sound("interceptor_hit")
+		return false
+	_award_destroyed(breacher)
+	protect_breachers_destroyed += 1
+	intercepted_count += 1
+	hostile_intercepted.emit(interceptor.id, breacher.id)
+	_set_status("BREACHER DESTROYED | SUPPORT SHIP FREED", 2.5)
+	battle_event.emit("Breacher destroyed in Protect the convoy")
+	return true
+
+func _ensure_convoy_audio() -> void:
+	if is_instance_valid(protect_rapid_player):
+		return
+	protect_rapid_player = _boom_player("ConvoyRapidFireAudio", ProtectAudio.make_rapid_fire(), protect_rapid_fire_volume_db)
+	protect_rapid_player.max_polyphony = 3
+	protect_latch_player = _boom_player("ConvoyBreacherLatchAudio", ProtectAudio.make_breacher_latch(), protect_breacher_latch_volume_db)
+	protect_drain_player = _boom_player("ConvoyBreacherDrainAudio", ProtectAudio.make_breacher_drain(), protect_breacher_drain_volume_db)
+
+func _play_convoy_sound(which: String) -> void:
+	if not protect_convoy_sounds:
+		return
+	if which == "rapid_fire":
+		# At most about four bursts a second, so a big fight does not become a wall of noise.
+		if battle_time - protect_last_rapid_at < 0.25 or not is_instance_valid(protect_rapid_player):
+			return
+		protect_last_rapid_at = battle_time
+		protect_rapid_player.volume_db = protect_rapid_fire_volume_db
+		protect_rapid_player.play()
+	elif which == "breacher_latch":
+		if not is_instance_valid(protect_latch_player):
+			return
+		protect_latch_player.volume_db = protect_breacher_latch_volume_db
+		protect_latch_player.play()
+	protect_sound_counts[which] = int(protect_sound_counts.get(which, 0)) + 1
+
+func _set_drain_sound(on: bool) -> void:
+	if not is_instance_valid(protect_drain_player):
+		return
+	on = on and protect_convoy_sounds and protect_round_sounds and protect_active()
+	if on and not protect_drain_player.playing:
+		protect_drain_player.volume_db = protect_breacher_drain_volume_db
+		protect_drain_player.play()
+		protect_sound_counts["breacher_drain"] = int(protect_sound_counts.get("breacher_drain", 0)) + 1
+	elif not on and protect_drain_player.playing:
+		protect_drain_player.stop()
+
+## 1.0.7: gunfire lines and the pulsing drain link from each latched Breacher to its ship.
+func _draw_convoy_effects() -> void:
+	for breacher in contacts:
+		if breacher.get("phase", "") != "protect_breacher" or breacher.get("breach_state", "") != "latched":
+			continue
+		var ship := find_contact(breacher.get("civ_target", ""))
+		if ship.is_empty():
+			continue
+		var a: Vector2 = projection(breacher.position).point
+		var b: Vector2 = projection(ship.position).point
+		var pulse := 0.5 + 0.5 * sin(battle_time * 9.0)
+		draw_line(a, b, Color(hostile_color, 0.35 + 0.45 * pulse), 2.0, true)
+		draw_arc(b, 9.0 + 5.0 * pulse, 0.0, TAU, 28, Color(hostile_color, 0.25 + 0.35 * (1.0 - pulse)), 1.0, true)
+	for tracer in tracers:
+		var age := float(tracer.age)
+		if age < 0.0:
+			continue
+		var t := clampf(age / 0.14, 0.0, 1.0)
+		var from: Vector2 = projection(tracer.from).point
+		var to: Vector2 = projection(tracer.to).point
+		var head := from.lerp(to, t)
+		var tail := from.lerp(to, maxf(0.0, t - 0.35))
+		var color: Color = protect_drone_tracer_color if tracer.hostile else protect_tracer_color
+		color.a = 0.95 * (1.0 - 0.5 * t)
+		draw_line(tail, head, color, 1.5, true)
+
+## 1.0.7 Smart Repair Tender: how urgently a ship needs the tender. Ships losing hull now
+## (Attack Drones on them or a latched Breacher) and low on hull come first; ships it cannot
+## reach before they are lost score nothing. Returns {} when no ship needs it.
+func _tender_need(gunship: Dictionary, ship: Dictionary) -> float:
+	if float(ship.hull) >= 0.98 or _patch_used_up(ship):
+		return -1.0
+	var gap: float = maxf(0.0, gunship.position.distance_to(ship.position) - 0.08)
+	var eta := gap / maxf(0.01, protect_tender_speed)
+	var drain := 0.0
+	for other in contacts:
+		if other.kind == "drone" and other.get("phase", "") == "protect" and other.get("civ_target", "") == ship.id \
+				and other.position.distance_to(ship.position) <= protect_attack_range + 0.03:
+			drain += 1.0 / civilian_kill_seconds() * civilian_damage_factor(ship)
+		elif other.get("phase", "") == "protect_breacher" and other.get("breach_state", "") == "latched" and other.get("civ_target", "") == ship.id:
+			drain += 1.0 / convoy_breacher_drain_seconds() * civilian_damage_factor(ship)
+	if drain <= 0.0 and float(ship.hull) > protect_tender_ignore_above:
+		return -1.0
+	var need := 1.0 - float(ship.hull)
+	if drain > 0.0:
+		var seconds_left := float(ship.hull) / drain
+		if seconds_left < eta * 0.9:
+			return -1.0
+		need += 0.6 + 0.4 * clampf(1.0 - seconds_left / 20.0, 0.0, 1.0)
+	return need - 0.04 * eta
+
+func _tender_pick(gunship: Dictionary, current: Dictionary) -> Dictionary:
+	var best: Dictionary = {}
+	var best_score := 0.0
+	for ship in contacts:
+		if ship.get("faction", "") != "civilian":
+			continue
+		var score := _tender_need(gunship, ship)
+		if score > best_score:
+			best_score = score
+			best = ship
+	if not current.is_empty() and not best.is_empty() and best.id != current.id:
+		var keep := _tender_need(gunship, current)
+		if keep > 0.0 and best_score < keep + protect_tender_switch_margin:
+			return current
+	if best.is_empty() and not current.is_empty() and _tender_need(gunship, current) > -1.0:
+		return current
+	return best

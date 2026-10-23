@@ -8,12 +8,15 @@ A tactical space defense game for Windows (x64 and arm64), Mac (Apple M-series a
 
 - An animated 3D radar dome with a sweep pulse and original synthesized audio.
 - Defined waves in sets, with rising threats, a score multiplier and bonuses.
-- Protect the Fleet rounds, where Interceptors defend a Civilian Convoy.
+- Protect the convoy rounds between sets, where Interceptors defend a support fleet from Attack Drones and a hull-draining Breacher, helped by a Repair Tender.
+- Damage effects: a nuke hit scrambles the console screen, and losing the ship brings up a red SYSTEMS OFFLINE screen before the score screen. The scramble can be switched off in Settings (SCREEN EFFECTS).
 - A console frame with an alert box, NAV DATA and a hull gauge with percentage.
 - Interceptor squadrons, Gunships, a Stealth Interceptor special weapon, Rapid Repair and Jump.
 - Easy, Normal and Hard difficulty, and optional automatic modes.
 - High scores with per-battle stats; settings saved on the computer.
 - Game controller support with remappable buttons.
+
+![SYSTEMS OFFLINE screen with the score screen in front](docs/screenshots/systems_offline.png)
 
 ## Supported computers
 
@@ -34,7 +37,7 @@ Ready-to-play copies are on the [Releases](https://github.com/S8619G/Stellar-Def
 
 No installation or extra software is needed.
 
-**Photosensitivity warning:** the game contains flashing lights, full-screen flashes and pulsing images. See [NOTICE.md](NOTICE.md) before playing.
+**Photosensitivity warning:** the game contains flashing lights, full-screen flashes, screen scramble and flicker effects, and pulsing images. The screen scramble can be switched off in **Settings > SCREEN EFFECTS**. See [NOTICE.md](NOTICE.md) before playing.
 
 ## Controls
 
@@ -54,7 +57,8 @@ Xbox-style and PlayStation-style controllers are supported. Buttons can be chang
 | Y (Triangle) | Firewall on/off |
 | RB (R1) | Rapid Repair |
 | LB (L1) | Jump, held for one second |
-| LT / RT (L2 / R2) | Not set; can be given any action |
+| LT (L2) | Launch Stealth Interceptor |
+| RT (R2) | Use EMP |
 | MENU (Options) | Opens or closes Settings (pauses the battle) |
 | D-pad or left stick | Highlights the console buttons, the special weapon and the EMP; A presses the highlighted button |
 

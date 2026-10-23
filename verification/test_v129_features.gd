@@ -90,6 +90,16 @@ func _run() -> void:
 	console.quit_dry_run = true
 	var c: Control = console.get_node("CenterContainer/Dome/Contacts")
 	for _k130 in V130_OFF: c.set(_k130, V130_OFF[_k130])
+	# 1.0.7: these checks cover the 1.2.9 tender and the TIME row; the 1.0.7 tender and
+	# round end are checked in test_protect_convoy.
+	c.protect_tender_smart = false
+	# 1.0.7.2 tender rules are covered in test_protect_convoy.
+	c.protect_tender_launch_when_hit = false
+	c.protect_tender_stay_near = false
+	c.protect_tender_hull = false
+	c.protect_tender_lands = false
+	c.protect_timer_end = true
+	c.protect_interceptors_lost_end = false
 	var dome: Control = console.get_node("CenterContainer/Dome")
 	var frame: Control = console.get_node("ConsoleFrame")
 	c.auto_spawn = false
@@ -100,15 +110,15 @@ func _run() -> void:
 	c.klaxon_enabled = false
 
 	# ---------------- Version ----------------
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Project version is 0.1.2")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Version text reads STELLAR DEFENSE CONSOLE 1.0.1")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 0.1.2")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
 	check(not console.version_text().to_lower().contains("test"), "No Test label in the version text")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.1_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.1"
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.1", "Export presets name 0.1.2 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8"
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.8", "Export presets name 0.1.2 files")
 
 	# ---------------- Defaults: script off (1.2.8 round), scene on ----------------
 	var plain: Control = load("res://scripts/RadarContacts.gd").new()
@@ -139,8 +149,8 @@ func _run() -> void:
 		"protect_large_ship_lost_volume_db": -8.0, "protect_interceptor_lost_volume_db": -15.0, "civilian_hit_flash_seconds": 0.15,
 		"protect_wave_gap_min": 6.0, "protect_wave_gap_max": 10.0, "protect_breakoff_chance": 0.6, "protect_help_chance": 0.3,
 		"protect_help_range": 0.28, "protect_tail_range": 0.07, "protect_tail_cos": 0.35, "protect_interceptor_loss_chance": 0.07,
-		"protect_drone_shot_gap": 0.7, "civilian_repair_delay": 3.0, "civilian_repair_rate": 0.04, "civilian_repair_cap": 0.75,
-		"protect_gunship_chance": 0.5, "protect_gunship_repair_rate": 0.08}
+		"protect_drone_shot_gap": 0.7, "civilian_repair_delay": 3.0, "civilian_repair_rate": 0.02, "civilian_repair_cap": 0.75,
+		"protect_gunship_chance": 0.5, "protect_gunship_repair_rate": 0.1}  # 1.0.7.2: repairs 25% faster
 	for key in want:
 		check(is_equal_approx(float(c.get(key)), float(want[key])), "%s = %s" % [key, want[key]])
 	check(c.protect_wave_groups_min == 2 and c.protect_wave_groups_max == 3, "Waves: 2 to 3 groups")
@@ -475,9 +485,9 @@ func _run() -> void:
 	# ---------------- Round counter ----------------
 	start_protect(c, 1, 2, 19)
 	var rows: Array = frame.protect_counter_rows()
-	check(rows.size() == 3, "Round counter has three rows")
+	check(rows.size() == (4 if c.protect_breachers_total > 0 else 3), "Round counter has three rows (four with a Breacher)")
 	check(rows[0][0] == "SHIPS" and rows[0][1] == "%d OF %d" % [c.civilians_left(), c.protect_civilians_total], "SHIPS n OF m (%s)" % rows[0][1])
-	check(rows[1][0] == "ATTACK DRONES" and rows[1][1] == "%d LEFT" % c.protect_drones_total, "ATTACK DRONES n LEFT (%s)" % rows[1][1])
+	check(rows[1][0] == "DRONES" and rows[1][1] == "%d LEFT" % c.protect_drones_total, "DRONES n LEFT (%s)" % rows[1][1])
 	var secs := ceili(c.protect_round_seconds)
 	check(rows[2][0] == "TIME" and rows[2][1] == "%d:%02d" % [floori(secs / 60.0), secs % 60], "TIME m:ss (%s)" % rows[2][1])
 	check(rows[0][2] == c.civilian_color, "SHIPS in Civilian Color")
@@ -585,7 +595,7 @@ func _run() -> void:
 	check(not dome.three_rings_enabled and dome.ring_count == 2, "Two-ring rebrand, no legacy three-ring mode")
 	check(is_equal_approx(dome.STELLAR_CYCLE, 3.25), "Approved 3.25-second ring cycle")
 	check(is_equal_approx(dome.STELLAR_SWEEP, 1.2), "Approved 1.20-second sweeps")
-	check(is_equal_approx(dome.STELLAR_SECOND_START, 1.05), "Second starts 0.15 seconds before first ends")
+	check(is_equal_approx(dome.STELLAR_SECOND_START, 0.672), "Second starts at 56% of the first sweep (1.0.3)")
 	check(is_equal_approx(dome.ripple_period_seconds, 6.0) and dome.ripple_count == 3, "Background ripples unchanged")
 	check(dome.ring_color.is_equal_approx(Color(0.3254902, 0.34117648, 1, 1)) and is_equal_approx(dome.ring_thickness, 0.4), "Thin quiet ring core colour and width retained")
 

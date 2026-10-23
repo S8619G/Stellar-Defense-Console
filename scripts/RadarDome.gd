@@ -177,11 +177,14 @@ func _draw_rings(center: Vector2) -> void:
 	_draw_stellar_rings(center)
 	return
 
-## Selected Motion Study 02: same front/back hinge, opposite half-turns,
-## 0.15 s overlap, then a full 1 s pause after the second sweep.
+## Same front/back hinge, opposite half-turns. 1.0.3: the second (right) ring
+## starts when the first (left) ring is 56% through its sweep (0.672 s), so the
+## two rings visibly cross; then a 1.378 s pause. The second sweep tone in
+## radar_sweep_loop.wav starts at the same moment. (1.0.2 and earlier: 1.05 s.)
 const STELLAR_CYCLE := 3.25
 const STELLAR_SWEEP := 1.20
-const STELLAR_SECOND_START := 1.05
+const STELLAR_SECOND_START_SHARE := 0.56
+const STELLAR_SECOND_START := STELLAR_SWEEP * STELLAR_SECOND_START_SHARE
 
 static func stellar_angles(at_time: float) -> Vector2:
 	var phase := fposmod(at_time, STELLAR_CYCLE)

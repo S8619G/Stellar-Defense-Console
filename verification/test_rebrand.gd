@@ -14,7 +14,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	check(ProjectSettings.get_setting("application/config/name") == "Stellar Defense Console", "Original working title")
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.1", "Pre-release version")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Pre-release version")
 	check(OS.get_user_data_dir().ends_with("Stellar Defense Console"), "Independent save directory")
 	check(not DirAccess.dir_exists_absolute("res://references"), "No reference directory")
 	var console: Control = load("res://scenes/RadarConsole.tscn").instantiate()
@@ -26,7 +26,7 @@ func _run() -> void:
 	c.auto_spawn = false
 	root.add_child(console)
 	await process_frame
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.1", "Product name in settings")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Product name in settings")
 	check(console.github_url.is_empty() and console.settings_panel.version_label.disabled, "No stale public release link")
 	check(console.get_node("TopChrome").text == "RADAR", "Simple RADAR display label")
 	check(console.get_node("BottomButtons/Jump") == console.jump_button, "Jump button remains connected")
@@ -46,11 +46,11 @@ func _run() -> void:
 	var dome: Control = console.dome
 	check(dome.stellar_angles(0.0).is_equal_approx(Vector2.ZERO), "Both sweeps begin at rest")
 	check(is_equal_approx(dome.stellar_angles(.6).x, -PI*.5), "First sweep speed/direction")
-	check(is_zero_approx(dome.stellar_angles(1.04).y), "Second waits until 1.05")
-	check(dome.stellar_angles(1.10).x < 0 and dome.stellar_angles(1.10).y > 0, "Opposing overlapping sweeps")
+	check(is_equal_approx(dome.STELLAR_SECOND_START, 0.672) and is_zero_approx(dome.stellar_angles(0.67).y) and dome.stellar_angles(0.68).y > 0.0, "Right ring starts at 56% of the left sweep (0.672 s)")
+	check(dome.stellar_angles(0.9).x < 0 and dome.stellar_angles(0.9).y > 0 and dome.stellar_angles(0.9).x > -PI, "Opposing sweeps overlap for 0.528 s")
 	var ended := Vector2(-PI, PI)
-	check(dome.stellar_angles(2.25).is_equal_approx(ended), "Second ends at 2.25 seconds")
-	check(dome.stellar_angles(3.249).is_equal_approx(ended), "Full one-second pause after second sweep")
+	check(not dome.stellar_angles(1.86).is_equal_approx(ended) and dome.stellar_angles(1.872).is_equal_approx(ended), "Second ends at 1.872 seconds")
+	check(dome.stellar_angles(3.249).is_equal_approx(ended), "Pause after second sweep lasts to the end of the 3.25 s cycle")
 	check(dome.stellar_angles(3.25).is_equal_approx(Vector2.ZERO), "3.25-second cycle repeats")
 	for angle in [-PI, -PI*.5, 0.0, PI*.5, PI]:
 		var points: PackedVector2Array = dome.three_ring_points(Vector2.ZERO, 1, angle)
@@ -67,6 +67,27 @@ func _run() -> void:
 			quiet = false
 			break
 	check(quiet, "Full one-second pause is silent")
+	# 1.0.3: the second sweep tone starts with the right ring (0.672 s = sample 32256).
+	var samples := PackedInt32Array()
+	for i in range(0, wave.data.size(), 2):
+		samples.append(wave.data.decode_s16(i))
+	var before := 0
+	for i in range(31000, 32256):
+		before = maxi(before, absi(samples[i]))
+	var after := 0
+	for i in range(32256, 32256 + 4800):
+		after = maxi(after, absi(samples[i]))
+	check(before < 6000 and after > 25000, "Second sweep tone starts with the right ring at 0.672 s")
+	var peak := 0
+	for v in samples:
+		peak = maxi(peak, absi(v))
+	check(peak <= 29490, "Overlapping tones do not clip (peak at or below the original)")
+	var tail_quiet := true
+	for i in range(int(1.6 * 48000), 156000):
+		if samples[i] != 0:
+			tail_quiet = false
+			break
+	check(tail_quiet, "Silent from 1.6 s to the end of the cycle")
 	for name in ["radar_sweep_loop", "radar_alert_loop", "radar_contact_chirp"]:
 		var imported: AudioStreamWAV = load("res://assets/audio/" + name + ".wav")
 		check(imported != null and imported.format == AudioStreamWAV.FORMAT_16_BITS,

@@ -8,9 +8,9 @@ All artwork, icons and audio in this repository were created for this project. T
 
 ## Photosensitivity warning
 
-This game contains flashing lights, full-screen flashes, explosions and pulsing images. A very small number of people may experience seizures or other symptoms when exposed to such effects. If you or anyone in your family has a history of epilepsy or seizures, consult a doctor before playing. Stop playing at once and seek medical advice if you feel dizzy, have altered vision, eye or muscle twitches, disorientation or any involuntary movement. Play in a well-lit room and take regular breaks.
+This game contains flashing lights, full-screen flashes, explosions, screen scramble and flicker effects, and pulsing images. A very small number of people may experience seizures or other symptoms when exposed to such effects. If you or anyone in your family has a history of epilepsy or seizures, consult a doctor before playing. Stop playing at once and seek medical advice if you feel dizzy, have altered vision, eye or muscle twitches, disorientation or any involuntary movement. Play in a well-lit room and take regular breaks.
 
-When running from source, the full-screen flashes can be reduced or switched off in the Godot Inspector (**JUMP Flash** and **Explosions** groups on the Contacts node).
+The screen scramble and flicker shown when a nuke hits the ship or the ship is destroyed can be switched off in **Settings > SCREEN EFFECTS**. When running from source, the full-screen flashes can be reduced or switched off in the Godot Inspector (**JUMP Flash** and **Explosions** groups on the Contacts node).
 
 ## No warranty
 

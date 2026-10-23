@@ -3,19 +3,23 @@ extends RefCounted
 ## battle action. Saved in its own small file next to the other settings, so the
 ## existing settings file, high scores and Settings > DEFAULTS are unaffected.
 ##
-## Each button does at most one action. An action may have more than one button
-## (for example A and RT), but never none after a CHANGE: taking a button that
-## belongs to another action swaps the two buttons.
+## 1.0.4: each button's action is picked from a list in the Controller panel. When
+## the picked action is already on another button, the player chooses: swap the two
+## buttons, use both, move it here, or cancel. A button may be left (not set), and
+## an action may have no button (it is still on screen for the mouse and the D-pad
+## highlight). Stealth Interceptor and EMP are now actions too (LT and RT).
 ##
 ## Fixed (not reassignable): MENU opens/closes Settings, the D-pad / left stick
 ## moves the highlight, and in menus A (Cross) presses the highlighted control and
 ## B (Circle) goes back.
 
 const SECTION := "controller"
-const FORMAT := 1
+## 1.0.4: format 2. Format 1 files (1.0.0-1.0.3) had no Stealth/EMP actions, so
+## their blank LT/RT are filled with the new defaults when loaded.
+const FORMAT := 2
 
-## Battle actions, in the order shown in the Controller panel.
-const ACTIONS := ["launch_interceptors", "defense_shield", "launch_gunship", "firewall", "rapid_repair", "jump"]
+## Battle actions, in the order shown in the action list.
+const ACTIONS := ["launch_interceptors", "defense_shield", "launch_gunship", "firewall", "rapid_repair", "jump", "launch_stealth", "emp"]
 const ACTION_NAMES := {
 	"launch_interceptors": "LAUNCH INTERCEPTORS",
 	"defense_shield": "DEFENSE SHIELD",
@@ -23,7 +27,11 @@ const ACTION_NAMES := {
 	"firewall": "FIREWALL",
 	"rapid_repair": "RAPID REPAIR",
 	"jump": "JUMP",
+	"launch_stealth": "LAUNCH STEALTH INTERCEPTOR",
+	"emp": "USE EMP",
 }
+## Shorter names for the tags on the controller drawing, where room is tight.
+const SHORT_NAMES := {"launch_stealth": "STEALTH INTERCEPTOR"}
 
 ## Buttons that can carry a battle action. Triggers are analog axes in Godot; they
 ## are read as buttons with a press threshold (see ControllerInput.gd).
@@ -36,25 +44,21 @@ const JOY_BUTTON_IDS := {
 }
 
 ## Approved defaults (design/controller-1.3.1, translated to current names).
-## LT and RT start unassigned.
+## 1.0.4: LT launches the Stealth Interceptor and RT uses the EMP.
 const DEFAULTS := {
 	"a": "launch_interceptors", "b": "defense_shield", "x": "launch_gunship",
-	"y": "firewall", "rb": "rapid_repair", "lb": "jump", "lt": "", "rt": "",
+	"y": "firewall", "rb": "rapid_repair", "lb": "jump", "lt": "launch_stealth", "rt": "emp",
 }
+## Ways to resolve a picked action that another button already has.
+const CHOICES := ["swap", "both", "move"]
 
-## Valid, complete copy of a saved or edited assignment table.
+## Valid, complete copy of a saved or edited assignment table. A button with an
+## unknown value gets its default; blank buttons stay blank.
 static func clean(raw: Dictionary) -> Dictionary:
 	var out := {}
 	for button in BUTTONS:
 		var action = raw.get(button, DEFAULTS[button])
 		out[button] = action if typeof(action) == TYPE_STRING and (action == "" or action in ACTIONS) else DEFAULTS[button]
-	# An action left with no button (a damaged file) gets its default button back
-	# when that button is free; otherwise it stays reachable through the panel.
-	for action in ACTIONS:
-		if buttons_for(out, action).is_empty():
-			for button in DEFAULTS:
-				if DEFAULTS[button] == action and out[button] == "":
-					out[button] = action
 	return out
 
 static func defaults() -> Dictionary:
@@ -77,39 +81,57 @@ static func unassigned_buttons(bindings: Dictionary) -> Array[String]:
 			found.append(button)
 	return found
 
-## CHANGE: give Button to Action. The action's previous buttons are freed. If Button
-## belonged to another action, that action takes this action's previous button, so
-## no action is left without a button.
-static func assign(bindings: Dictionary, action: String, button: String) -> Dictionary:
+## Actions that no button performs (still usable with the mouse or the highlight).
+static func unassigned_actions(bindings: Dictionary) -> Array[String]:
+	var found: Array[String] = []
+	for action in ACTIONS:
+		if buttons_for(bindings, action).is_empty():
+			found.append(action)
+	return found
+
+## Other buttons that already perform Action (not counting Button itself).
+static func conflicts(bindings: Dictionary, button: String, action: String) -> Array[String]:
+	var found := buttons_for(clean(bindings), action)
+	found.erase(button)
+	return found
+
+## 1.0.4 pick from the list: give Button the Action. When other buttons already
+## have it, Choice decides what happens to them:
+##   "swap": they take Button's previous action (the buttons trade actions)
+##   "both": they keep it, so more than one button performs it
+##   "move": they become (not set)
+## Without other buttons, Choice is ignored. An unknown choice changes nothing.
+static func choose(bindings: Dictionary, button: String, action: String, choice: String = "") -> Dictionary:
 	var out := clean(bindings)
-	if not action in ACTIONS or not button in BUTTONS:
+	if not button in BUTTONS or not action in ACTIONS:
 		return out
-	var previous := buttons_for(out, action)
-	var displaced := action_for(out, button)
-	for old in previous:
-		out[old] = ""
+	var previous := action_for(out, button)
+	if previous == action:
+		return out
+	var others := conflicts(out, button, action)
+	if not others.is_empty():
+		if not choice in CHOICES:
+			return out
+		for other in others:
+			match choice:
+				"swap":
+					out[other] = previous
+				"move":
+					out[other] = ""
 	out[button] = action
-	if displaced != "" and displaced != action:
-		previous.erase(button)
-		if not previous.is_empty():
-			out[previous[0]] = displaced
-		else:
-			# The action had no other button: give the displaced action its default.
-			for fallback in DEFAULTS:
-				if DEFAULTS[fallback] == displaced and out[fallback] == "":
-					out[fallback] = displaced
-					break
 	return out
 
-## SET on an unassigned button's row: choose an extra button for Action ("" clears).
-static func set_extra(bindings: Dictionary, button: String, action: String) -> Dictionary:
-	var out := clean(bindings)
-	if not button in BUTTONS or not (action == "" or action in ACTIONS):
-		return out
-	if action == "" and buttons_for(out, out[button]).size() <= 1:
-		return out  # never leave an action without a button
-	out[button] = action
-	return out
+## Name of an action, or (not set). Short = the drawing's tag name.
+static func action_name(action: String, short := false) -> String:
+	if action == "":
+		return "(not set)"
+	if short and SHORT_NAMES.has(action):
+		return SHORT_NAMES[action]
+	return ACTION_NAMES.get(action, "(not set)")
+
+static func button_name(button: String, playstation := false) -> String:
+	var names := PLAYSTATION_NAMES if playstation else BUTTON_NAMES
+	return names.get(button, button.to_upper())
 
 static func label_for(bindings: Dictionary, action: String, playstation := false) -> String:
 	var names := PLAYSTATION_NAMES if playstation else BUTTON_NAMES
@@ -131,7 +153,18 @@ static func load_bindings(path: String) -> Dictionary:
 	for button in BUTTONS:
 		if config.has_section_key(SECTION, button):
 			raw[button] = config.get_value(SECTION, button)
-	return clean(raw)
+	return migrate(raw, int(config.get_value(SECTION, "format", 1)))
+
+## 1.0.4: buttons saved by 1.0.0-1.0.3 (format 1). Stealth Interceptor and EMP did
+## not exist as actions then, so a blank LT or RT gets its new default. Buttons the
+## player set themselves are kept.
+static func migrate(raw: Dictionary, format: int) -> Dictionary:
+	var out := clean(raw)
+	if format < 2:
+		for button in ["lt", "rt"]:
+			if out[button] == "":
+				out[button] = DEFAULTS[button]
+	return out
 
 ## Verified write, the same way as the settings: the new copy must read back
 ## before it replaces the old one.
