@@ -28,6 +28,8 @@ var set_offer_tag: String = "YOU CAN SWITCH TO"
 ## Card effect lines, filled in by the console from the battle's own values.
 var rapid_seconds: float = 6.0
 var double_seconds: float = 8.0
+## 1.0.9: how much faster Rapid Missile missiles fly (1.2 = 20% faster; 1.0 = no speed line).
+var rapid_speed_factor: float = 1.0
 
 var current: String = "RAPID"
 var other: String = "DOUBLE"
@@ -215,9 +217,14 @@ func full_name(pick: String) -> String:
 	return "RAPID MISSILE" if pick == "RAPID" else "DOUBLE MISSILE"
 
 func effect_text(pick: String) -> String:
+	# 1.0.9: a third line names what makes each pick different.
 	if pick == "RAPID":
-		return "Fires 1 missile\nevery %s seconds" % _seconds_text(rapid_seconds)
-	return "Fires a pair of missiles\nevery %s seconds" % _seconds_text(double_seconds)
+		var text := "Fires 1 missile\nevery %s seconds" % _seconds_text(rapid_seconds)
+		var faster := roundi((rapid_speed_factor - 1.0) * 100.0)
+		if faster > 0:
+			text += "\nMissiles fly %d%% faster" % faster
+		return text
+	return "Fires a pair of missiles\nevery %s seconds\nCan hit two targets at once" % _seconds_text(double_seconds)
 
 func _fill_card(index: int, pick: String) -> void:
 	card_tags[index].text = card_tag_texts[index]

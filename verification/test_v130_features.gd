@@ -88,17 +88,17 @@ func all_buttons(node: Node, out: Array) -> void:
 
 func _run() -> void:
 	# ---- Version and export presets ----
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 0.1.2")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 0.1.2")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
 	check(presets.get_value("preset.0", "name") == "Windows Desktop" and presets.get_value("preset.0.options", "binary_format/architecture") == "x86_64"
-		and str(presets.get_value("preset.0", "export_path")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe"), "Windows x64 preset")
+		and str(presets.get_value("preset.0", "export_path")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe"), "Windows x64 preset")
 	check(presets.get_value("preset.2", "name") == "Windows Desktop ARM64" and presets.get_value("preset.2.options", "binary_format/architecture") == "arm64"
-		and str(presets.get_value("preset.2", "export_path")).ends_with("Stellar_Defense_Console_1.0.8_Windows_arm64.exe"), "Windows ARM64 preset")
+		and str(presets.get_value("preset.2", "export_path")).ends_with("Stellar_Defense_Console_1.0.9_Windows_arm64.exe"), "Windows ARM64 preset")
 	check(presets.get_value("preset.1", "platform") == "macOS" and presets.get_value("preset.1.options", "binary_format/architecture") == "universal"
-		and str(presets.get_value("preset.1", "export_path")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version") == "1.0.8", "Mac universal preset (Intel and M-series)")
-	check(presets.get_value("preset.0.options", "application/file_version") == "1.0.8" and presets.get_value("preset.2.options", "application/file_version") == "1.0.8", "Windows file versions follow the project version (as 1.2.9)")
+		and str(presets.get_value("preset.1", "export_path")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version") == "1.0.9", "Mac universal preset (Intel and M-series)")
+	check(presets.get_value("preset.0.options", "application/file_version") == "1.0.9" and presets.get_value("preset.2.options", "application/file_version") == "1.0.9", "Windows file versions follow the project version (as 1.2.9)")
 
 	# ---- Script defaults (1.2.9 behaviour) and the scene's 0.1.2 values ----
 	var plain: Control = load("res://scripts/RadarContacts.gd").new()
@@ -242,10 +242,10 @@ func _run() -> void:
 	earn(9999)
 	check(not c.rapid_missile_active(), "Normal: no Rapid Missile below 10,000 points")
 	earn(1)
-	check(c.rapid_missile_active() and is_equal_approx(c.ship_missile_gap(), 6.0) and c.missiles_per_volley() == 1, "Normal: Rapid Missile at 10,000 points, 1 missile every 6 s")
+	check(c.rapid_missile_active() and is_equal_approx(c.ship_missile_gap(), 5.0) and c.missiles_per_volley() == 1, "Normal: Rapid Missile at 10,000 points, 1 missile every 5 s (1.0.9)")
 	clean(2)
 	earn(6000)
-	check(c.rapid_missile_active() and is_equal_approx(c.ship_missile_gap(), 5.0), "Hard: Rapid Missile at 6,000 points, every 5 s")
+	check(c.rapid_missile_active() and is_equal_approx(c.ship_missile_gap(), 4.0), "Hard: Rapid Missile at 6,000 points, every 4 s (1.0.9)")
 	clean(0)
 	earn(50000)
 	check(not c.rapid_missile_active() and c.double_missile_active() and c.missile_bonus_offers == 0, "Easy: no Rapid Missile and never a pick")
@@ -263,8 +263,8 @@ func _run() -> void:
 	check(not c.is_processing(), "Battle paused while the prompt is open")
 	check(c.rapid_missile_active() and not c.double_missile_active(), "Current bonus stays in use until a pick")
 	check(panel.message_label.text == "You just earned DOUBLE MISSILE. You can only have one missile bonus.", "Prompt message matches the mockup")
-	check(panel.card_tags[0].text == "YOU HAVE NOW" and panel.card_titles[0].text == "RAPID MISSILE" and panel.card_effects[0].text == "Fires 1 missile\nevery 6 seconds", "Current card matches the mockup")
-	check(panel.card_tags[1].text == "JUST EARNED" and panel.card_titles[1].text == "DOUBLE MISSILE" and panel.card_effects[1].text == "Fires a pair of missiles\nevery 8 seconds", "Just-earned card matches the mockup")
+	check(panel.card_tags[0].text == "YOU HAVE NOW" and panel.card_titles[0].text == "RAPID MISSILE" and panel.card_effects[0].text == "Fires 1 missile\nevery 5 seconds\nMissiles fly 20% faster", "Current card matches the 1.0.9 card text")
+	check(panel.card_tags[1].text == "JUST EARNED" and panel.card_titles[1].text == "DOUBLE MISSILE" and panel.card_effects[1].text == "Fires a pair of missiles\nevery 8 seconds\nCan hit two targets at once", "Just-earned card matches the 1.0.9 card text")
 	check(panel.timeout_label.text == "No pick in 20 s: you keep RAPID MISSILE", "Timeout line: 20 s countdown")
 	check(panel.get("keep_button") == null and panel.get("take_button") == null and panel.cards.size() == 2 and panel.cards[0] is Button and panel.highlighted == 0, "1.0.5: no KEEP / TAKE buttons; the two cards are the buttons, current one highlighted")
 	var buttons := []
@@ -309,7 +309,7 @@ func _run() -> void:
 	earn(20000)
 	check(c.double_missile_active() and not console.bonus_pick_open, "Hard: Double Missile first, no prompt")
 	earn(5000)
-	check(console.bonus_pick_open and panel.message_label.text == "You just earned RAPID MISSILE. You can only have one missile bonus." and panel.card_titles[0].text == "DOUBLE MISSILE" and panel.card_effects[1].text == "Fires 1 missile\nevery 5 seconds", "Rapid earned second: DOUBLE card first, RAPID card second, every 5 s on Hard")
+	check(console.bonus_pick_open and panel.message_label.text == "You just earned RAPID MISSILE. You can only have one missile bonus." and panel.card_titles[0].text == "DOUBLE MISSILE" and panel.card_effects[1].text == "Fires 1 missile\nevery 4 seconds\nMissiles fly 20% faster", "Rapid earned second: DOUBLE card first, RAPID card second, every 4 s on Hard (1.0.9)")
 	panel.cards[1].pressed.emit()
 	check(c.rapid_missile_active() and not c.double_missile_active(), "TAKE RAPID")
 	c.hard_rapid_missile_points = 6000

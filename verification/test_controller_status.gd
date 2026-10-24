@@ -311,8 +311,8 @@ func _battle_flash() -> void:
 	check(pad.flash_control == null, "Mouse clicks do not use the controller light")
 
 func _check_report() -> void:
-	var report: String = pad.check_report("STELLAR DEFENSE CONSOLE 1.0.8")
-	check(report.begins_with("CONTROLLER CHECK | STELLAR DEFENSE CONSOLE 1.0.8"), "Controller check names the game version")
+	var report: String = pad.check_report("STELLAR DEFENSE CONSOLE 1.0.9")
+	check(report.begins_with("CONTROLLER CHECK | STELLAR DEFENSE CONSOLE 1.0.9"), "Controller check names the game version")
 	check(report.contains("System: ") and report.contains("Godot ") and report.contains(Engine.get_architecture_name()), "Controller check names the system, architecture and engine")
 	check(report.contains("Controller system: started") or report.contains("Controller system: unknown"), "Controller check says whether the controller system started")
 	check(report.contains("Controllers found: 0"), "Controller check counts the controllers")

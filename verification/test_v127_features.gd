@@ -283,15 +283,13 @@ func _run() -> void:
 		else:
 			check(lines[2] == "NO CONVOY BONUS" and int(rows2[2][1]) < 40, "lost: a quiet NO CONVOY BONUS line")
 		check(lines[lines.size() - 1].begins_with("NEXT"), "%s: the NEXT line is kept" % outcome)
-		# Panel inside the scope.
+		# 1.0.9: the result uses the shared round box: 600 wide like the Game Over screen,
+		# centred, in the upper scope and inside the radar area (the approved mockup lets its
+		# top corners reach the scope's curved edge).
 		var r: Rect2 = c.protect_result_rect(rows2)
-		var radius: float = c.get_parent().sphere_radius
 		var centre: Vector2 = c.size * 0.5
-		var inside := true
-		for p in [r.position, Vector2(r.end.x, r.position.y), Vector2(r.position.x, r.end.y), r.end]:
-			if not ScopeShape.contains((p - centre) / radius):
-				inside = false
-		check(inside, "%s: the result panel stays inside the scope" % outcome)
+		var inside := Rect2(Vector2.ZERO, c.size).encloses(r) and is_equal_approx(r.size.x, 600.0) and is_equal_approx(r.get_center().x, centre.x) and r.get_center().y < centre.y
+		check(inside, "%s: the result panel is the shared 600-wide box in the upper scope" % outcome)
 	# Saved partial colour: green; lost: red.
 	check(c.protect_result_rows(c.rest_tally_lines())[0][2].r > 0.9, "SUPPORT FLEET LOST title is red")
 	# Flash: twice a second for 3 s, then steady.

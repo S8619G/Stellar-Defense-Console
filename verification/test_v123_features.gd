@@ -120,13 +120,13 @@ func _run() -> void:
 	c.auto_spawn = true
 
 	# --- Version ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 0.1.2")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 0.1.2")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9", "Version text reads STELLAR DEFENSE CONSOLE 1.0.9")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8", "Export presets name 0.1.2 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.9", "Export presets name 0.1.2 files")
 
 	# --- Defaults ---
 	check(c.protect_drone_interceptor_hits == 4 and c.protect_drone_hits_step == 1 and c.protect_drone_hits_cap == 6, "Round Attack Drones: 4 Interceptor hits, +1 per set, cap 6")

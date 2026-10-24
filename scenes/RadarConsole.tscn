@@ -81,7 +81,7 @@ Button/styles/focus = SubResource("Button_hover")
 default_font_size = 18
 
 [sub_resource type="StyleBoxFlat" id="StyleBox_game_over"]
-bg_color = Color(0.018, 0.005, 0.008, 0.97)
+bg_color = Color(0.018, 0.005, 0.008, 0.8)
 border_width_left = 3
 border_width_top = 3
 border_width_right = 3
@@ -190,6 +190,10 @@ carrier_second_nuke = true
 rapid_missile_bonus = true
 rapid_repair_needs_shown_damage = true
 missile_bonus_pick_after_wave = true
+normal_rapid_missile_interval = 5.0
+hard_rapid_missile_interval = 4.0
+rapid_missile_speed_factor = 1.2
+shared_score_boxes = true
 
 [node name="GameOverPanel" type="Panel" parent="CenterContainer/Dome"]
 visible = false

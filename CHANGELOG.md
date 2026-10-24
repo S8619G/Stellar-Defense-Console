@@ -1,5 +1,34 @@
 # Stellar Defense Console changelog
 
+## 1.0.9
+
+### Score and round boxes
+
+- Every round box (wave cleared, set complete, Bonus Sweep result and the Protect the convoy result) now has the same size and place: 600 pixels wide, the same width as the Game Over screen, centred in the top part of the scope.
+- The round boxes are see-through (65% solid), so the radar shows behind them. Titles are larger (size 26) and detail lines size 16. All text has a dark outline so it stays easy to read.
+- The Protect the convoy result keeps its green or red border and its large yellow bonus. The other boxes keep their yellow NEXT line.
+- The Game Over screen and the high score stats box are 80% solid (they were almost fully solid), with the same dark outline on the text.
+
+### SYSTEMS OFFLINE list
+
+- When the ship is destroyed, the list on the red SYSTEMS OFFLINE screen now types out one line at a time, left to right, with a block cursor: a new line about every 0.9 seconds (it was 0.38 seconds).
+- When the red panel is full, the list steps up one line at a time and keeps cycling.
+- Statuses are still picked at random each time. Timing of the red screen and the score screen is unchanged.
+
+### Low hull warning
+
+- When the hull drops below 6%, the HULL bar flashes bright red and dark red (about 2.5 times a second), and the console gives a light screen flicker (about a quarter of a second, about every 1.5 to 3 seconds).
+- The warning stops when the hull is repaired to 6% or more, and when the ship is destroyed (SYSTEMS OFFLINE takes over).
+- A nuke hit's own scramble takes over while it plays.
+- With SCREEN EFFECTS off there is no flicker, but the HULL bar still flashes.
+- No new sounds.
+
+### Rapid Missile balance
+
+- Rapid Missile now fires 1 missile every 5 seconds on Normal (was 6) and every 4 seconds on Hard (was 5), and its missiles fly 20% faster.
+- Double Missile, the points needed to earn each bonus, and Gunship missiles are unchanged.
+- The bonus pick cards have a third line: RAPID MISSILE "Missiles fly 20% faster", DOUBLE MISSILE "Can hit two targets at once".
+
 ## 1.0.8
 
 1.0.8 brings the new Protect the convoy round and new damage effects. It also includes all changes from 1.0.2 to 1.0.6, which were not released separately.

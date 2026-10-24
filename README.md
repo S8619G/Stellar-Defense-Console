@@ -9,8 +9,8 @@ A tactical space defense game for Windows (x64 and arm64), Mac (Apple M-series a
 - An animated 3D radar dome with a sweep pulse and original synthesized audio.
 - Defined waves in sets, with rising threats, a score multiplier and bonuses.
 - Protect the convoy rounds between sets, where Interceptors defend a support fleet from Attack Drones and a hull-draining Breacher, helped by a Repair Tender.
-- Damage effects: a nuke hit scrambles the console screen, and losing the ship brings up a red SYSTEMS OFFLINE screen before the score screen. The scramble can be switched off in Settings (SCREEN EFFECTS).
-- A console frame with an alert box, NAV DATA and a hull gauge with percentage.
+- Damage effects: a nuke hit scrambles the console screen, and losing the ship brings up a red SYSTEMS OFFLINE screen before the score screen. The scramble and the low hull flicker can be switched off in Settings (SCREEN EFFECTS).
+- A console frame with an alert box, NAV DATA and a hull gauge with percentage. Below 6% hull, the HULL bar flashes red and the screen flickers lightly.
 - Interceptor squadrons, Gunships, a Stealth Interceptor special weapon, Rapid Repair and Jump.
 - Easy, Normal and Hard difficulty, and optional automatic modes.
 - High scores with per-battle stats; settings saved on the computer.
@@ -37,7 +37,7 @@ Ready-to-play copies are on the [Releases](https://github.com/S8619G/Stellar-Def
 
 No installation or extra software is needed.
 
-**Photosensitivity warning:** the game contains flashing lights, full-screen flashes, screen scramble and flicker effects, and pulsing images. The screen scramble can be switched off in **Settings > SCREEN EFFECTS**. See [NOTICE.md](NOTICE.md) before playing.
+**Photosensitivity warning:** the game contains flashing lights, full-screen flashes, screen scramble and flicker effects, and pulsing images. The screen scramble and the low hull flicker can be switched off in **Settings > SCREEN EFFECTS**. See [NOTICE.md](NOTICE.md) before playing.
 
 ## Controls
 

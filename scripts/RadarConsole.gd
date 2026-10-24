@@ -105,6 +105,12 @@ const DamageEffects = preload("res://scripts/DamageEffects.gd")
 @export var best_score_color := Color(0.72, 0.66, 0.70, 0.85)
 ## 1.08: hovering or tapping a high-score entry shows its battle stats.
 @export var show_score_stats: bool = true
+## 1.0.9: how solid the high score stats box is (1 = fully solid; 1.0.8 used 0.96). The Game
+## Over score screen's own background is the StyleBox_game_over colour in the scene (0.8).
+@export_range(0.2, 1.0) var stats_box_opacity: float = 0.8
+## 1.0.9: dark outline around the Game Over and stats box text so it reads through the
+## see-through background (0 = none).
+@export_range(0, 12) var score_screen_text_outline: int = 5
 
 @export_group("Battle Readout")
 ## 1.1.0: the left-side readout lists enemies destroyed this battle (by every source),
@@ -193,6 +199,7 @@ func _ready() -> void:
 	_center_title()
 	_build_settings()
 	_build_game_over_quit()
+	_apply_score_screen_outline()
 	_apply_tooltip_setting(self)
 	$ShipStatus.emp_used.connect(func() -> void: log_event("EMP used | %d charge%s left" % [contacts.emp_charges, "" if contacts.emp_charges == 1 else "s"]))
 	_build_emp_split_button()
@@ -491,6 +498,7 @@ func open_bonus_pick(current: String, other: String, set_offer: bool) -> void:
 	bonus_pick_panel.set_offer_tag = bonus_pick_set_tag
 	bonus_pick_panel.rapid_seconds = contacts.rapid_missile_interval()
 	bonus_pick_panel.double_seconds = contacts.own_missile_interval
+	bonus_pick_panel.rapid_speed_factor = contacts.rapid_missile_speed_factor
 	bonus_pick_panel.open(current, other, set_offer)
 	log_event("missile bonus pick opened | has %s, can take %s | %s" % [current, other, "after set" if set_offer else "just earned"])
 
@@ -735,6 +743,9 @@ func _process(delta: float) -> void:
 		damage_effects.reset()
 		_restart_sweep_sound()
 	was_defeated = defeated
+	# 1.0.9: low hull warning (below 6%): the HULL bar flashes and a light screen flicker.
+	var frame: Control = get_node_or_null("ConsoleFrame")
+	damage_effects.set_low_hull_warning(frame != null and frame.low_hull_warning_active())
 	# 1.0.8: the score screen comes in front 2 s after the red screen shows.
 	game_over_panel.visible = defeated and damage_effects.score_screen_ready()
 	$CenterContainer/Dome/GameOverPanel/FinalScore.text = "FINAL SCORE  %d" % contacts.score
@@ -996,7 +1007,7 @@ func _build_stats_box() -> void:
 	stats_box.visible = false
 	stats_box.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.06, 0.02, 0.05, 0.96)
+	style.bg_color = Color(0.06, 0.02, 0.05, stats_box_opacity)
 	style.border_color = Color(1.0, 0.6, 0.78, 0.8)
 	style.set_border_width_all(2)
 	style.set_corner_radius_all(4)
@@ -1011,6 +1022,14 @@ func _build_stats_box() -> void:
 	stats_label.add_theme_color_override("font_color", Color(0.93, 0.88, 0.91))
 	stats_box.add_child(stats_label)
 	game_over_panel.add_child(stats_box)
+
+## 1.0.9: a dark outline on every line of text on the Game Over screen (and its stats box).
+func _apply_score_screen_outline() -> void:
+	if score_screen_text_outline <= 0:
+		return
+	for label in game_over_panel.find_children("*", "Label", true, false):
+		label.add_theme_constant_override("outline_size", score_screen_text_outline)
+		label.add_theme_color_override("font_outline_color", Color(0.0, 0.0, 0.0, 0.85))
 
 ## 1.08: the text for one entry's stats; entries saved before 1.08 have none.
 func score_stats_text(entry: Dictionary) -> String:

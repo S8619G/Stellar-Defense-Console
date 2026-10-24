@@ -94,14 +94,14 @@ func _run() -> void:
 	c.ship_missiles_target_nukes = false
 
 	# ---------------- Version ----------------
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 0.1.2")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 0.1.2")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9", "Version text reads STELLAR DEFENSE CONSOLE 1.0.9")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.8_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.8"
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.8", "Export presets name 0.1.2 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.0.9"
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.9", "Export presets name 0.1.2 files")
 
 	# ---------------- Splash screen ----------------
 	var splash_path := "res://assets/splash/stellar_defense_console_splash.png"

@@ -148,10 +148,10 @@ func _run() -> void:
 
 	# --- 6. Version from the project setting ---
 	# 1.06: full builds; Test Build is off by default and the number is 1.06.
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.8", "Project version is 1.08")
-	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8", "Version text reads STELLAR DEFENSE CONSOLE 1.0.8")
+	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 1.08")
+	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9", "Version text reads STELLAR DEFENSE CONSOLE 1.0.9")
 	console.test_build = true
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.8 TEST", "With Test Build it reads STELLAR DEFENSE CONSOLE 1.0.8 TEST")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9 TEST", "With Test Build it reads STELLAR DEFENSE CONSOLE 1.0.9 TEST")
 	console.test_build = false
 	check(int(ProjectSettings.get_setting("debug/file_logging/max_log_files", 0)) == 10, "Godot keeps its last 10 log files (was 5)")
 
@@ -314,7 +314,7 @@ func _run() -> void:
 	check(is_instance_valid(log) and log.enabled and FileAccess.file_exists(log.file_path), "A session log file is created at start")
 	check(log.file_path.begins_with("user://logs/radar_session_") and log.file_path.ends_with(".log"), "File is user://logs/radar_session_<timestamp>.log")
 	var text := file_text(log.file_path)
-	check(text.contains("START") and text.contains("STELLAR DEFENSE CONSOLE 1.0.8") and text.contains("Godot ") and text.contains("CPU ") and text.contains("screen "), "Start-up line: version, Godot, system, CPU and screen")
+	check(text.contains("START") and text.contains("STELLAR DEFENSE CONSOLE 1.0.9") and text.contains("Godot ") and text.contains("CPU ") and text.contains("screen "), "Start-up line: version, Godot, system, CPU and screen")
 	check(text.contains("graphics driver ") and text.contains("GPU ") and text.contains("difficulty NORMAL") and text.contains("auto options") and text.contains("effects ") and text.contains("radar "), "Start-up line: graphics driver and GPU, difficulty, autos and volumes")
 	var lines_before: int = log.lines_written
 	var click := InputEventMouseButton.new()
@@ -415,7 +415,7 @@ func _run() -> void:
 	check(console.log_folder_opens == 1 and DirAccess.dir_exists_absolute(log.folder_path()), "The version link opens the log folder (dry run in tests)")
 	check(FileAccess.get_file_as_string("res://scripts/RadarConsole.gd").contains("OS.shell_open(path)"), "The log folder opens in the system file browser (OS.shell_open)")
 	var version: LinkButton = panel.version_label
-	check(version.text == "STELLAR DEFENSE CONSOLE 1.0.8", "Version label shows STELLAR DEFENSE CONSOLE 1.0.8")
+	check(version.text == "STELLAR DEFENSE CONSOLE 1.0.9", "Version label shows STELLAR DEFENSE CONSOLE 1.0.9")
 	check(version.get_theme_font_size("font_size") <= 15 and version.get_theme_color("font_color").a < 0.8, "Version label is small and dim")
 	check(panel.reset_button.text == "DEFAULTS" and panel.reset_button.size == panel.remember_button.size and panel.reset_button.size == panel.auto_jump_button.size, "RESET TO DEFAULTS is now DEFAULTS, sized like the switch buttons")
 	check(panel.reset_button.position.y == panel.remember_button.position.y, "DEFAULTS stays on the REMEMBER SETTINGS row")

@@ -186,11 +186,11 @@ func _run() -> void:
 		patterns[",".join(probe.statuses)] = true
 		probe.queue_free()
 	check(patterns.size() >= 15, "Statuses are picked at random each time (%d different lists in 20)" % patterns.size())
-	# The list builds up one line about every 0.38 s.
-	check(fx.visible_line_count() == 1, "First system line shows as the red screen appears")
-	fx.destroyed_time = 1.0 + 0.38 * 3 + 0.01
+	# 1.0.9: the list builds up one typed line about every 0.9 s.
+	check(fx.visible_line_count() == 1, "First system line starts as the red screen appears")
+	fx.destroyed_time = 1.0 + 0.9 * 3 + 0.01
 	fx._update(0.0)
-	check(fx.visible_line_count() == 4, "A new line about every 0.38 s")
+	check(fx.visible_line_count() == 4, "A new line about every 0.9 s (1.0.9)")
 	# Score screen timing.
 	fx.destroyed_time = 2.95
 	fx._update(0.0)
@@ -238,9 +238,18 @@ func _run() -> void:
 	var without_pulse := await shot()
 	var panel_rect: Rect2 = console.game_over_panel.get_global_rect()
 	var pr := Rect2i(Vector2i(panel_rect.position * k) + Vector2i(3, 3), Vector2i(panel_rect.size * k) - Vector2i(6, 6))
-	# The score screen's background is 97% solid (as in the approved mockup), so only a 3%
-	# see-through shows; its text, buttons and border are never moved or split.
-	check(saved_strength > 0.1 and region_diff(with_pulse, without_pulse, pr) < 0.015, "Score screen is never scrambled (difference %.4f; only its 3%% see-through background)" % region_diff(with_pulse, without_pulse, pr))
+	# 1.0.9: the score screen background is 80% solid, so the scramble shows faintly through
+	# it; its text, buttons and border are in front and never moved or split. Compare with the
+	# same area with the score screen hidden: in front, at most about a quarter shows through.
+	var panel_diff := region_diff(with_pulse, without_pulse, pr)
+	console.game_over_panel.modulate = Color(1, 1, 1, 0)
+	fx.scramble.visible = true
+	var bare_with := await shot()
+	fx.scramble.visible = false
+	var bare_without := await shot()
+	console.game_over_panel.modulate = Color(1, 1, 1, 1)
+	var bare_diff := region_diff(bare_with, bare_without, pr)
+	check(saved_strength > 0.1 and bare_diff > 0.0 and panel_diff < bare_diff * 0.3, "Score screen is never scrambled (difference %.4f in front vs %.4f with it hidden; only its 20%% see-through background)" % [panel_diff, bare_diff])
 	var red_strip := Rect2i(int(r.position.x * k) + 6, pr.end.y + 4, int(r.size.x * k) - 12, 40)
 	check(region_diff(with_pulse, without_pulse, red_strip) > 0.02, "The red screen behind it is scrambled")
 	# Mouse Retry restores everything.
@@ -306,13 +315,32 @@ func _run() -> void:
 	GameSettings.save_settings(console.settings_file, console.settings)
 
 	# ---------------- gameplay unchanged ----------------
+	# 1.0.9: the faster Hard Rapid Missile changed the 1.0.8 seed (4242) to a battle with no
+	# nuke hits, so the first seed below with nuke hits is used.
 	var traces: Array = []
+	var play_seed := 4242
+	for seed_try in [4242, 11, 77, 2026, 9001, 31337]:
+		await new_console("verify_fx_play")
+		console._on_settings_changed(GameSettings.clean({"screen_effects": true, "difficulty": 2, "auto_battery": true, "auto_interceptors": true, "auto_gunships": true, "auto_repair": true}))
+		c.difficulty = 2
+		c.reset_battle()
+		c.rng.seed = seed_try
+		c.set_process(false)
+		for i in range(30000):
+			c._process(1.0 / 30.0)
+			console._process(1.0 / 30.0)
+			if c.is_defeated() or c.nuclear_hits > 0:
+				break
+		if c.nuclear_hits > 0:
+			play_seed = seed_try
+			break
+	print("Seed with nuke hits: ", play_seed)
 	for effects_on in [true, false]:
 		await new_console("verify_fx_play")
 		console._on_settings_changed(GameSettings.clean({"screen_effects": effects_on, "difficulty": 2, "auto_battery": true, "auto_interceptors": true, "auto_gunships": true, "auto_repair": true}))
 		c.difficulty = 2
 		c.reset_battle()
-		c.rng.seed = 4242
+		c.rng.seed = play_seed
 		c.set_process(false)
 		var trace: Array = []
 		for i in range(30000):

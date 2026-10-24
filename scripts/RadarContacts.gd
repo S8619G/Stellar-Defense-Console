@@ -346,6 +346,18 @@ const SMALL_HOSTILE_KINDS := ["drone"]
 @export_range(-0.8, 0.8) var rest_tally_offset: float = 0.22
 ## 1.2.2: border width of the wave tally panel, in pixels (1.2.1 was 1).
 @export_range(1.0, 8.0) var rest_tally_border_width: float = 3.0
+## 1.0.9: every round box (wave cleared, set complete, Bonus Sweep result and the Protect
+## the convoy result) shares one size, place and see-through look. Off = the 1.0.8 boxes.
+@export var shared_score_boxes: bool = false
+## Width of the shared round box in pixels (600 = the Game Over score screen width).
+@export_range(300.0, 900.0) var score_box_width: float = 600.0
+## Top of the shared round box, in scope radii from the centre (negative = above the
+## centre). -0.48 = the place the Protect the convoy result used in 1.0.8.
+@export_range(-0.95, 0.8) var score_box_offset: float = -0.48
+## How solid the shared round box background is (1 = fully solid; 1.0.8 used 0.9).
+@export_range(0.2, 1.0) var score_box_opacity: float = 0.65
+## Dark outline around the round box text so it reads through the see-through box (0 = none).
+@export_range(0, 12) var score_box_text_outline: int = 5
 
 @export_group("Protect the Fleet")
 ## 1.2.2: after each Major engagement the scope is reset and 2 to 4 random civilian
@@ -837,6 +849,9 @@ var evade_outside := 0
 @export_range(1000, 200000, 500) var hard_rapid_missile_points: int = 6000
 @export_range(2.0, 20.0) var normal_rapid_missile_interval: float = 6.0
 @export_range(2.0, 20.0) var hard_rapid_missile_interval: float = 5.0
+## 1.0.9: while Rapid Missile is in use, the ship's own missiles fly this much faster
+## (1.2 = 20% faster). 1.0 = the 1.0.8 speed. Double Missile and Gunship missiles unchanged.
+@export_range(1.0, 2.0) var rapid_missile_speed_factor: float = 1.0
 ## 0.1.2: once both missile bonuses are earned, the pick is offered again after each
 ## set of five waves. Off = offered only once, when the second bonus is earned.
 @export var missile_bonus_offer_each_set: bool = true
@@ -2684,7 +2699,7 @@ func _update_own_weapons(delta: float) -> void:
 			missile.target_id = target.id
 			missile_retargets += 1
 		missile.target_position = target.position
-		missile.position = missile.position.move_toward(target.position, delta * movement_speed * own_missile_speed)
+		missile.position = missile.position.move_toward(target.position, delta * movement_speed * missile_flight_speed(missile))
 		if missile.position.distance_to(target.position) <= 0.025:
 			_remove_contact(id)
 			if target.kind == "nuke":
@@ -3335,6 +3350,13 @@ func ship_missile_gap() -> float:
 	if rapid_missile_active():
 		return rapid_missile_interval()
 	return own_missile_interval
+
+## 1.0.9: flight speed of one of our missiles: the ship's own missiles fly faster while
+## Rapid Missile is in use; Gunship missiles always use the normal speed.
+func missile_flight_speed(missile: Dictionary) -> float:
+	if missile.get("kind", "") == "own_missile" and rapid_missile_active():
+		return own_missile_speed * rapid_missile_speed_factor
+	return own_missile_speed
 
 ## Seconds between ship missiles with the Rapid Missile bonus at this difficulty.
 func rapid_missile_interval() -> float:
@@ -6643,6 +6665,9 @@ func _draw_rest_tally(font: Font) -> void:
 	var lines: Array[String] = rest_tally_lines()
 	if lines.is_empty():
 		return
+	if shared_score_boxes:
+		_draw_score_box(font, lines)
+		return
 	if rest_after_protect:
 		_draw_protect_result(font, lines)
 		return
@@ -6674,6 +6699,8 @@ func protect_result_rows(lines: Array[String]) -> Array:
 	return rows
 
 func protect_result_rect(rows: Array) -> Rect2:
+	if shared_score_boxes:
+		return score_box_rect(rows)
 	var radius: float = get_parent().sphere_radius
 	var height := 24.0
 	for row in rows:
@@ -6699,6 +6726,50 @@ func _draw_protect_result(font: Font, lines: Array[String]) -> void:
 			fs -= 1
 		var tw := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
 		draw_string(font, Vector2(size.x * 0.5 - tw * 0.5, y), text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
+
+## 1.0.9: rows of the shared round box, each [text, font size, colour, line height].
+## The convoy result keeps its own rows (green or red title, large yellow bonus); the
+## other boxes get a title, detail lines and the yellow NEXT line.
+func score_box_rows(lines: Array[String]) -> Array:
+	if rest_after_protect:
+		return protect_result_rows(lines)
+	var rows := [[lines[0], 26, Color("#ede0e8"), 34.0]]
+	for i in range(1, lines.size()):
+		rows.append([lines[i], 16, Color("#ffe28b") if i == lines.size() - 1 else Color("#b9a8b2"), 26.0])
+	return rows
+
+## 1.0.9: the shared round box: Score Box Width wide, centred, its top at Score Box Offset.
+func score_box_rect(rows: Array) -> Rect2:
+	var radius: float = get_parent().sphere_radius
+	var height := 24.0
+	for row in rows:
+		height += float(row[3])
+	return Rect2(size.x * 0.5 - score_box_width * 0.5, size.y * 0.5 + radius * score_box_offset - 30.0, score_box_width, height)
+
+## 1.0.9: background colour of the shared round box (black at Score Box Opacity).
+func score_box_background() -> Color:
+	return Color(0.0, 0.0, 0.0, score_box_opacity)
+
+func _draw_score_box(font: Font, lines: Array[String]) -> void:
+	var rows := score_box_rows(lines)
+	var r := score_box_rect(rows)
+	var flash_on := rest_after_protect and protect_result_flash_on()
+	draw_rect(r, score_box_background())
+	draw_rect(r, rows[0][2] if flash_on else Color("#77324f"), false, maxf(1.0, rest_tally_border_width))
+	var y := r.position.y + 6.0
+	for i in range(rows.size()):
+		y += float(rows[i][3])
+		var color: Color = rows[i][2]
+		if rest_after_protect and i == 2 and last_protect_bonus > 0 and not flash_on:
+			color = Color(color, 0.35)
+		var fs: int = rows[i][1]
+		var text: String = rows[i][0]
+		while fs > 10 and font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > r.size.x - 24.0:
+			fs -= 1
+		var pos := Vector2(size.x * 0.5 - font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x * 0.5, y)
+		if score_box_text_outline > 0:
+			draw_string_outline(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, score_box_text_outline, Color(0.0, 0.0, 0.0, 0.85))
+		draw_string(font, pos, text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs, color)
 
 ## 1.2.7: threats inbound to the ship for the alert box, most dangerous first. Each entry is
 ## [count, label, colour]; a line is listed only while its count is above 0. Attack Drones, the

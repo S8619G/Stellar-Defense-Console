@@ -48,7 +48,7 @@ func setup(owner_console: Control, battle: Control) -> void:
 	column.add_theme_constant_override("separation", 14)
 	panel.add_child(column)
 	column.add_child(_label("PROTECT THE CONVOY TEST", 26, Color(0.94, 0.67, 0.80)))
-	column.add_child(_label("Test build 1.0.8 (Protect the convoy round).\nPick a difficulty and how far into the game the round comes. Later sets bring more drones and challenges.", 15, Color(0.85, 0.85, 0.88)))
+	column.add_child(_label("Test build 1.0.9 (Protect the convoy round).\nPick a difficulty and how far into the game the round comes. Later sets bring more drones and challenges.", 15, Color(0.85, 0.85, 0.88)))
 	column.add_child(_label("DIFFICULTY", 16, Color(0.78, 0.59, 0.71)))
 	var level_row := HBoxContainer.new()
 	level_row.add_theme_constant_override("separation", 10)

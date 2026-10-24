@@ -10,6 +10,11 @@ extends Control
 ##   front 2 s after the red screen shows and is never scrambled.
 ## - SCREEN EFFECTS OFF (Settings): no scrambles; the red screen still shows (no flicker)
 ##   and the score screen comes in front 2 s after it.
+## - 1.0.9: the SYSTEMS OFFLINE list types out one line about every 0.9 s, left to right,
+##   with a block cursor, and steps up one line at a time once the panel is full.
+## - 1.0.9: low hull warning: while the console says the hull is low (below 6%), a light
+##   flicker of the same scramble (about 0.25 s at 7%) every 1.5 to 3 s. A nuke hit's own
+##   scramble takes over while it plays. Off with SCREEN EFFECTS off.
 
 const SYSTEM_NAMES: Array[String] = ["MAIN POWER", "AUXILIARY POWER", "RADAR", "TRACKING",
 	"TARGETING", "DEFENSE SHIELD", "JUMP DRIVE", "NAVIGATION", "COMMUNICATIONS", "DATA LINK",
@@ -28,6 +33,25 @@ const LIGHT_PULSE_SECONDS := 0.3
 const LIGHT_PULSE_STRENGTH := 0.4
 const LIGHT_PULSE_GAP_MIN := 2.5
 const LIGHT_PULSE_GAP_MAX := 4.0
+## 1.0.9 SYSTEMS OFFLINE list: a new line every LINE_SECONDS, typed at TYPE_CHARS_PER_SECOND
+## (name, dots, then status), stepping up one line in STEP_SCROLL_SECONDS when the panel is full.
+const LINE_SECONDS := 0.9
+const TYPE_CHARS_PER_SECOND := 90.0
+const STEP_SCROLL_SECONDS := 0.12
+## Block cursor blinks this many times a second on the newest line once it is typed.
+const CURSOR_BLINKS_PER_SECOND := 1.5
+## List layout on the red panel (panel pixels): first line top, line step, font size, margins.
+const LIST_TOP := 222.0
+const LIST_STEP := 53.0
+const LIST_FONT_SIZE := 32
+const LIST_MARGIN := 180.0
+## 1.0.9 low hull flicker.
+const LOW_HULL_SECONDS := 0.25
+const LOW_HULL_STRENGTH := 0.07
+const LOW_HULL_GAP_MIN := 1.5
+const LOW_HULL_GAP_MAX := 3.0
+## First flicker this long after the warning starts.
+const LOW_HULL_FIRST_SECONDS := 0.6
 ## New scramble pattern this many times a second (the mockups ran at 30 frames a second).
 const PATTERN_RATE := 30.0
 
@@ -58,6 +82,12 @@ var statuses: Array[String] = []
 var pulses: Array[float] = []
 ## Counters for tests and the session log.
 var nuke_scrambles: int = 0
+## 1.0.9 low hull warning: on while the console reports a low hull; the clock counts the
+## seconds it has been on and the next flicker starts at low_hull_next.
+var low_hull_warning: bool = false
+var low_hull_clock: float = 0.0
+var low_hull_next: float = LOW_HULL_FIRST_SECONDS
+var low_hull_flickers: int = 0
 var destroyed_sequences: int = 0
 ## The strength of the scramble shown this frame (0 = none), for tests and captures.
 var scramble_strength: float = 0.0
@@ -169,8 +199,24 @@ func reset() -> void:
 	statuses.clear()
 	pulses.clear()
 	scramble_strength = 0.0
+	set_low_hull_warning(false)
 	red_screen.visible = false
 	scramble.visible = false
+
+## 1.0.9: the console turns the low hull warning on (hull below 6%) and off (6% or more,
+## or the ship destroyed). Turning it on starts a fresh flicker timing.
+func set_low_hull_warning(on: bool) -> void:
+	if on == low_hull_warning:
+		return
+	low_hull_warning = on
+	low_hull_clock = 0.0
+	low_hull_next = LOW_HULL_FIRST_SECONDS
+
+## Strength of the low hull flicker at this moment (0 between flickers).
+func low_hull_flicker_strength() -> float:
+	if not low_hull_warning or is_destroyed():
+		return 0.0
+	return LOW_HULL_STRENGTH * _envelope(low_hull_clock - low_hull_next, LOW_HULL_SECONDS)
 
 func set_screen_effects(on: bool) -> void:
 	screen_effects_enabled = on
@@ -216,6 +262,15 @@ func _update(delta: float) -> void:
 						strength = maxf(strength, LIGHT_PULSE_STRENGTH * _envelope(k, LIGHT_PULSE_SECONDS))
 	elif is_hit_active():
 		strength = hit_strength * _envelope(hit_time, hit_duration)
+	if low_hull_warning and not is_destroyed():
+		low_hull_clock += delta
+		if low_hull_clock > low_hull_next + LOW_HULL_SECONDS:
+			# One flicker finished: count it (when shown) and pick the next gap.
+			if screen_effects_enabled:
+				low_hull_flickers += 1
+			low_hull_next = low_hull_clock + rng.randf_range(LOW_HULL_GAP_MIN, LOW_HULL_GAP_MAX)
+		if not is_hit_active():
+			strength = maxf(strength, low_hull_flicker_strength())
 	if not screen_effects_enabled:
 		strength = 0.0
 	scramble_strength = strength
@@ -248,7 +303,37 @@ static func _envelope(u: float, d: float) -> float:
 func visible_line_count() -> int:
 	if red_seconds() < 0.0:
 		return 0
-	return int(red_seconds() * (1.0 / 0.38)) + 1
+	return int(red_seconds() / LINE_SECONDS) + 1
+
+## 1.0.9: how many characters of list line i are typed so far (name, dots and status).
+func typed_chars(line_index: int) -> int:
+	if red_seconds() < 0.0:
+		return 0
+	return maxi(0, int((red_seconds() - line_index * LINE_SECONDS) * TYPE_CHARS_PER_SECOND))
+
+## 1.0.9: lines that fit on the red panel below the title before the list steps up.
+func list_rows() -> int:
+	return maxi(1, int(floor((offline_text.size.y - 36.0 - LIST_TOP) / LIST_STEP)))
+
+## 1.0.9: how far the list has stepped up, in pixels. Each new line past a full panel moves
+## it up one line in STEP_SCROLL_SECONDS (fast at first, easing in).
+func list_scroll_offset() -> float:
+	var t_on := maxf(0.0, red_seconds())
+	var n := visible_line_count()
+	var rows := list_rows()
+	var since := t_on - (n - 1) * LINE_SECONDS
+	var before := maxf(0.0, n - 1 - rows) * LIST_STEP
+	var after := maxf(0.0, n - rows) * LIST_STEP
+	var k := clampf(since / STEP_SCROLL_SECONDS, 0.0, 1.0)
+	return lerpf(before, after, 1.0 - pow(1.0 - k, 2.0))
+
+## 1.0.9: the dots between a system name and its status, filling the room between them.
+func _dots_for(font: Font, system_name: String, state: String, w: float) -> String:
+	var nw := font.get_string_size(system_name, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE).x
+	var sw := font.get_string_size(state, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE).x
+	var dot_width := font.get_string_size(" .", HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE).x
+	var room := (w - LIST_MARGIN - sw - 14.0) - (LIST_MARGIN + nw + 14.0)
+	return " .".repeat(maxi(0, int(floor(room / maxf(1.0, dot_width)))))
 
 func _draw_offline_text() -> void:
 	var w := offline_text.size.x
@@ -264,42 +349,48 @@ func _draw_offline_text() -> void:
 	offline_text.draw_string(font, Vector2((w - tw) * 0.5, 50.0 + font.get_ascent(title_size)), title,
 		HORIZONTAL_ALIGNMENT_LEFT, -1, title_size, white)
 	offline_text.draw_line(Vector2(132, 192), Vector2(w - 132, 192), white, 3.0)
-	# The list: one line about every 0.38 s from the top, then it scrolls up.
+	# 1.0.9: the list types out line by line, then steps up one line at a time.
 	var t_on := maxf(0.0, red_seconds())
-	var top := 222.0
 	var bottom := h - 36.0
-	var step := 53.0
-	var speed := step / 0.38
-	var line_size := 32
-	var n := int(t_on * speed / step) + 1
-	var offset := maxf(0.0, t_on * speed + step - (bottom - top))
-	var lx := 180.0
-	var rx := w - 180.0
-	var ascent := font.get_ascent(line_size)
-	var dot_width := font.get_string_size(" .", HORIZONTAL_ALIGNMENT_LEFT, -1, line_size).x
-	for i in range(maxi(0, n - 20), n):
-		var y := top + i * step - offset
-		if y < top - step or y > bottom:
+	var n := visible_line_count()
+	var rows := list_rows()
+	var offset := list_scroll_offset()
+	var lx := LIST_MARGIN
+	var rx := w - LIST_MARGIN
+	var ascent := font.get_ascent(LIST_FONT_SIZE)
+	for i in range(maxi(0, n - rows - 2), n):
+		var y := LIST_TOP + i * LIST_STEP - offset
+		if y < LIST_TOP - LIST_STEP or y > bottom:
 			continue
 		var index := i % SYSTEM_NAMES.size()
 		var system_name := SYSTEM_NAMES[index]
 		var state: String = statuses[index] if index < statuses.size() else "OFFLINE"
+		# The top line fades out as it steps up past the line under the title.
 		var alpha := 1.0
-		if offset > 0.0 and y < top + 50.0:
-			alpha = maxf(0.0, (y - top + 10.0) / 60.0)
-		if y > bottom - 30.0:
-			alpha = maxf(0.0, (bottom - y) / 30.0)
+		if y < LIST_TOP:
+			alpha = maxf(0.0, 1.0 - (LIST_TOP - y) / LIST_STEP)
 		if alpha <= 0.0:
 			continue
-		var nw := font.get_string_size(system_name, HORIZONTAL_ALIGNMENT_LEFT, -1, line_size).x
-		var sw := font.get_string_size(state, HORIZONTAL_ALIGNMENT_LEFT, -1, line_size).x
+		var dots := _dots_for(font, system_name, state, w)
+		var typed := typed_chars(i)
 		var base := y + ascent
-		offline_text.draw_string(font, Vector2(lx, base), system_name, HORIZONTAL_ALIGNMENT_LEFT, -1, line_size, Color(1, 1, 1, alpha))
-		var x := lx + nw + 14.0
-		var room := (rx - sw - 14.0) - x
-		var dots := ""
-		var count := int(floor(room / maxf(1.0, dot_width)))
-		for d in range(maxi(0, count)):
-			dots += " ."
-		offline_text.draw_string(font, Vector2(x, base), dots, HORIZONTAL_ALIGNMENT_LEFT, -1, line_size, Color(1.0, 0.8, 0.8, alpha * 0.8))
-		offline_text.draw_string(font, Vector2(rx - sw, base), state, HORIZONTAL_ALIGNMENT_LEFT, -1, line_size, Color(1, 1, 1, alpha))
+		var ink := Color(1, 1, 1, alpha)
+		var name_part := system_name.substr(0, mini(typed, system_name.length()))
+		offline_text.draw_string(font, Vector2(lx, base), name_part, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE, ink)
+		var cursor_x := lx + font.get_string_size(name_part, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE).x
+		var dots_x := lx + font.get_string_size(system_name, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE).x + 14.0
+		var dots_typed := clampi(typed - system_name.length(), 0, dots.length())
+		if dots_typed > 0:
+			var dots_part := dots.substr(0, dots_typed)
+			offline_text.draw_string(font, Vector2(dots_x, base), dots_part, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE, Color(1.0, 0.8, 0.8, alpha * 0.8))
+			cursor_x = dots_x + font.get_string_size(dots_part, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE).x
+		var state_x := rx - font.get_string_size(state, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE).x
+		var state_typed := clampi(typed - system_name.length() - dots.length(), 0, state.length())
+		if state_typed > 0:
+			var state_part := state.substr(0, state_typed)
+			offline_text.draw_string(font, Vector2(state_x, base), state_part, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE, ink)
+			cursor_x = state_x + font.get_string_size(state_part, HORIZONTAL_ALIGNMENT_LEFT, -1, LIST_FONT_SIZE).x
+		# Block cursor: follows the typing, then blinks at the end of the newest line.
+		var typing := typed < system_name.length() + dots.length() + state.length()
+		if typing or (i == n - 1 and int(t_on * CURSOR_BLINKS_PER_SECOND * 2.0) % 2 == 0):
+			offline_text.draw_rect(Rect2(cursor_x + 4.0, base - ascent * 0.9, 18.0, ascent), ink)

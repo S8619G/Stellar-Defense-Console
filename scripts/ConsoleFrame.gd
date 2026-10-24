@@ -11,6 +11,12 @@ const BONUS_FONT_SIZE := 16
 const BONUS_TOP := 156.0
 const BONUS_LINE_STEP := 20.0
 const ScopeShape = preload("res://scripts/ScopeShape.gd")
+## 1.0.9 low hull warning colours of the HULL bar.
+const LOW_HULL_BRIGHT := Color("#ff2b2b")
+const LOW_HULL_DARK := Color("#5a0c12")
+const LOW_HULL_LINE_BRIGHT := Color("#ff4b4b")
+const LOW_HULL_LINE_DARK := Color8(120, 30, 40)
+const LOW_HULL_GLOW := Color(1.0, 0.15, 0.15, 0.22)
 @onready var battle: Control = $"../CenterContainer/Dome/Contacts"
 @onready var dome: Control = $"../CenterContainer/Dome"
 @onready var ship_status: Control = $"../ShipStatus"
@@ -37,6 +43,13 @@ const ScopeShape = preload("res://scripts/ScopeShape.gd")
 @export var console_layout_v2: bool = false
 ## The left panel's HULL gauge turns red at this hull percent or less.
 @export_range(5.0, 60.0) var hull_low_percent: float = 30.0
+## 1.0.9 low hull warning: below this hull percent (and above 0) the HULL bar flashes red
+## and the console shows a light screen flicker. 0 = off.
+@export_range(0.0, 30.0) var low_hull_warning_percent: float = 6.0
+## Flashes a second of the HULL bar during the low hull warning.
+@export_range(0.5, 8.0) var low_hull_flash_rate: float = 2.5
+## Seconds the low hull warning has been on (0 when off); the bar flash counts from it.
+var low_hull_time: float = 0.0
 ## 0.1.2: wider vertical gauge; reference-pixel width scales with the console.
 @export_range(12.0, 24.0) var hull_gauge_width: float = 16.0
 ## TRACKS shows the real contact count, and the right scale shows the Defense Shield charge.
@@ -79,6 +92,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	panel_time += delta
+	low_hull_time = low_hull_time + delta if low_hull_warning_active() else 0.0
 	if nav_data_panel:
 		if not _nav_connected and battle != null:
 			battle.jump_completed.connect(func() -> void:
@@ -578,6 +592,17 @@ func hull_gauge_fill_rect() -> Rect2:
 func hull_gauge_color() -> Color:
 	return ship_status.hull_display_color()
 
+## 1.0.9: true while the hull is below Low Hull Warning Percent and the ship is not destroyed.
+func low_hull_warning_active() -> bool:
+	if battle == null or low_hull_warning_percent <= 0.0 or battle.is_defeated():
+		return false
+	var percent: float = battle.hull / maxf(1.0, battle.max_hull) * 100.0
+	return percent > 0.0 and percent < low_hull_warning_percent
+
+## 1.0.9: the bright half of each HULL bar flash (starts bright when the warning starts).
+func low_hull_flash_on() -> bool:
+	return low_hull_warning_active() and fmod(low_hull_time * low_hull_flash_rate, 1.0) < 0.55
+
 func hull_percent_text() -> String:
 	var fraction := clampf(battle.hull / maxf(1.0, battle.max_hull), 0.0, 1.0)
 	return "%d%%" % int(round(fraction * 100.0))
@@ -641,8 +666,16 @@ func _v2_panels(o: Dictionary, k: float) -> void:
 	var low := hull_f * 100.0 <= hull_low_percent
 	var gauge_line := Color8(235, 70, 80) if low else panel_dim_color
 	var gauge_fill := hull_gauge_fill_rect()
+	var fill_color := hull_gauge_color()
+	if low_hull_warning_active():
+		# 1.0.9: flash bright red (fill, outline and a faint glow behind the bar), then dark red.
+		var flash_on := low_hull_flash_on()
+		fill_color = LOW_HULL_BRIGHT if flash_on else LOW_HULL_DARK
+		gauge_line = LOW_HULL_LINE_BRIGHT if flash_on else LOW_HULL_LINE_DARK
+		if flash_on:
+			draw_rect(hull_gauge_rect().grow(-0.5 * k), LOW_HULL_GLOW)
 	if gauge_fill.size.y > 0.0:
-		draw_rect(gauge_fill, hull_gauge_color())
+		draw_rect(gauge_fill, fill_color)
 	# Border last: fill can reach its inner edge without covering the outline.
 	draw_rect(hull_gauge_rect(), gauge_line, false, 1.0 * k)
 	draw_string(ThemeDB.fallback_font, hull_percent_baseline(), hull_percent_text(),
