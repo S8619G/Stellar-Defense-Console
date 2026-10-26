@@ -49,6 +49,7 @@ func _run() -> void:
 	await install_checks()
 	await startup_checks()
 	stealth_checks()
+	tls_checks()
 	if server_pid > 0:
 		OS.kill(server_pid)
 	print("SDC111_RESULT checks=%d failures=%d" % [checks, failures])
@@ -311,6 +312,12 @@ func console_checks() -> void:
 	check(pop.visible and pop.mode == "message" and pop.title.text == "COULD NOT CHECK FOR UPDATES", "Failed check: plain message")
 	pop.back()
 	check(p.about_status.text.contains("Could not reach GitHub"), "ABOUT status line after a failed check")
+	# 1.1.1 fix: a refused certificate gets its own message (Windows ARM64 report).
+	console.check_now_running = true
+	console._on_check_done({"ok": false, "secure": true, "error": "secure connection, result 5"})
+	await frames(2)
+	check(pop.visible and pop.mode == "message" and pop.title.text == "COULD NOT CHECK FOR UPDATES" and pop.note.text.contains("secure connection"), "Refused certificate: secure-connection message")
+	pop.back()
 	# GO BACK asks first.
 	var bk := ConfigFile.new()
 	bk.load(console.updater.state_file)
@@ -585,3 +592,22 @@ func stealth_checks() -> void:
 	check(absf(ct.stealth_shot_seconds - 3.0) < 0.001, "Second nuke 3 seconds after the first (was 4)")
 	check(ct.stealth_home_turn >= 2.0, "Stealth Interceptor turns home faster (%.1f times)" % ct.stealth_home_turn)
 	k.free()
+
+# ------------------------------------------------------------------
+## 1.1.1 fix: the game's own list of trusted certificate authorities, used after the
+## computer's list refuses GitHub's certificate. The network part is
+## verification/tls_fallback_test.py (real GitHub, authorities hidden from the engine).
+func tls_checks() -> void:
+	var u := Updater.new()
+	root.add_child(u)
+	var roots: X509Certificate = u.bundled_roots()
+	check(roots != null, "TLS: the game's list of trusted authorities loads")
+	var pem := FileAccess.get_file_as_string(Updater.TRUSTED_ROOTS_PATH)
+	check(pem.count("BEGIN CERTIFICATE") >= 100, "TLS: the list has %d authorities" % pem.count("BEGIN CERTIFICATE"))
+	check(not u.use_bundled_roots, "TLS: the computer's own list is tried first")
+	check(u.switch_to_bundled_roots() and u.use_bundled_roots, "TLS: switches to the game's list after a failure")
+	check(not u.switch_to_bundled_roots(), "TLS: switches only once (no endless retry)")
+	check(u.tls_options() != null, "TLS: secure connection settings with the game's list")
+	var cfg := FileAccess.get_file_as_string("res://export_presets.cfg")
+	check(cfg.count('include_filter="*.crt"') == 4, "TLS: all four builds include the list")
+	u.queue_free()

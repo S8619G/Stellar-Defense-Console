@@ -22,6 +22,9 @@
 - CHECK AT STARTUP OFF stops the startup check; CHECK NOW still works.
 - Steam copies are updated by Steam; the ABOUT tab says so and the game does not check GitHub.
 
+- Secure connections: the game first uses the computer's own list of trusted certificate authorities. If that list cannot verify GitHub's certificate (seen on Windows, which keeps only part of its list on the computer), the game uses its own built-in list (the one Firefox uses). If the connection still fails, the message says a secure connection could not be made, instead of asking to check the internet.
+- A download that meets a temporary GitHub server error is tried again.
+
 ### Stealth Interceptor
 
 - Fires its nukes from about 1.7 times as far away from the target as before.

@@ -91,6 +91,17 @@ func _run() -> void:
 	await frames(4)
 	# --- Settings tabs ---
 	await fresh()
+	if OS.get_environment("CAP_SECURE") == "1":
+		# 1.1.1 fix: a refused certificate (the Windows ARM64 report).
+		console.open_settings()
+		console.settings_panel.show_tab(2)
+		console.updater._record_check(false, "Could not make a secure connection to GitHub.")
+		console.refresh_about()
+		console.check_now_running = true
+		console._on_check_done({"ok": false, "secure": true, "error": "secure connection, result 5"})
+		await save("24_secure_connection_message")
+		quit()
+		return
 	var ini := ConfigFile.new()
 	ini.set_value("updates", "check_at_startup", true)
 	ini.set_value("updates", "last_check_unix", int(Time.get_unix_time_from_system()) - 600)

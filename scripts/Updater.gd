@@ -26,6 +26,11 @@ const REPO := "S8619G/Stellar-Defense-Console"
 const TEST_REPO := "S8619G/Stellar-Defense-Console-Update-Test"
 const CONFIRM_ARG := "--sdc-update-confirm="
 const TEST_API_ARG := "--sdc-update-test-api="
+## 1.1.1: trusted certificate authorities shipped with the game (Mozilla's list, as in
+## Firefox). Windows keeps only part of its list on the computer and fetches the rest when a
+## browser asks, so the game could not verify GitHub's certificate there. The computer's own
+## list is tried first; after a certificate failure the game uses this list instead.
+const TRUSTED_ROOTS_PATH := "res://assets/certs/trusted_roots.crt"
 
 var api_url: String = ""
 var releases_page: String = ""
@@ -50,6 +55,11 @@ var dry_launch: bool = false
 var steam_build: bool = false
 var update_test_build: bool = false
 var running_version: String = ""
+## Set after the computer's own list failed a secure connection (kept for this run).
+var use_bundled_roots: bool = false
+## Tests: another file of trusted authorities.
+var trusted_roots_path: String = TRUSTED_ROOTS_PATH
+var _bundled_roots: X509Certificate
 
 var state := ConfigFile.new()
 var busy: bool = false
@@ -150,11 +160,42 @@ func backup_version() -> String:
 # ------------------------------------------------------------------
 ## Asks GitHub for the latest release. Emits check_done with:
 ## ok, newer, version, date, size, notes, asset (url, name), sums_url, page, error.
+## Secure connection settings: the computer's own list, or the game's list after a
+## certificate failure.
+func tls_options() -> TLSOptions:
+	if use_bundled_roots:
+		var roots := bundled_roots()
+		if roots != null:
+			return TLSOptions.client(roots)
+	return TLSOptions.client()
+
+func bundled_roots() -> X509Certificate:
+	if _bundled_roots == null:
+		var cert := X509Certificate.new()
+		if cert.load(trusted_roots_path) == OK:
+			_bundled_roots = cert
+	return _bundled_roots
+
+## After a failed secure connection: true when the game's own list can be tried.
+func switch_to_bundled_roots() -> bool:
+	if use_bundled_roots or bundled_roots() == null:
+		return false
+	use_bundled_roots = true
+	return true
+
 func check(timeout: float = -1.0) -> void:
 	if timeout <= 0.0:
 		timeout = check_timeout
 	_check_serial += 1
 	var serial := _check_serial
+	_send_check(serial)
+	get_tree().create_timer(timeout).timeout.connect(func() -> void:
+		if serial == _check_serial:
+			if is_instance_valid(_check_request):
+				_check_request.cancel_request()
+			_finish_check(serial, {"ok": false, "error": "timeout"}))
+
+func _send_check(serial: int) -> void:
 	if is_instance_valid(_check_request):
 		_check_request.cancel_request()
 		_check_request.queue_free()
@@ -163,18 +204,13 @@ func check(timeout: float = -1.0) -> void:
 	# requests early in testing).
 	_check_request.timeout = 0.0
 	_check_request.max_redirects = 5
+	_check_request.set_tls_options(tls_options())
 	add_child(_check_request)
 	_check_request.request_completed.connect(_on_check_completed.bind(serial))
 	var headers := PackedStringArray(["User-Agent: " + user_agent, "Accept: application/vnd.github+json"])
 	var err := _check_request.request(api_url, headers)
 	if err != OK:
 		_finish_check(serial, {"ok": false, "error": "request %d" % err})
-		return
-	get_tree().create_timer(timeout).timeout.connect(func() -> void:
-		if serial == _check_serial:
-			if is_instance_valid(_check_request):
-				_check_request.cancel_request()
-			_finish_check(serial, {"ok": false, "error": "timeout"}))
 
 func cancel_check() -> void:
 	_check_serial += 1
@@ -182,6 +218,15 @@ func cancel_check() -> void:
 		_check_request.cancel_request()
 
 func _on_check_completed(result: int, code: int, _headers: PackedStringArray, body: PackedByteArray, serial: int) -> void:
+	if serial != _check_serial:
+		return
+	if result == HTTPRequest.RESULT_TLS_HANDSHAKE_ERROR:
+		if switch_to_bundled_roots():
+			# Try once more with the game's own list (same time limit).
+			_send_check.call_deferred(serial)
+			return
+		_finish_check(serial, {"ok": false, "secure": true, "error": "secure connection, result %d" % result})
+		return
 	if result != HTTPRequest.RESULT_SUCCESS:
 		_finish_check(serial, {"ok": false, "error": "result %d" % result})
 		return
@@ -233,7 +278,7 @@ func _finish_check(serial: int, result: Dictionary) -> void:
 			text = "Version %s is available." % result.version
 		_record_check(true, text)
 	else:
-		_record_check(false, "Could not reach GitHub.")
+		_record_check(false, "Could not make a secure connection to GitHub." if bool(result.get("secure", false)) else "Could not reach GitHub.")
 	last_result = result
 	check_done.emit(result)
 
@@ -381,7 +426,7 @@ func _download_once(start_url: String, path: String, expected_size: int, report:
 		if parts.is_empty():
 			return "url"
 		var client := HTTPClient.new()
-		var tls: TLSOptions = TLSOptions.client() if parts.tls else null
+		var tls: TLSOptions = tls_options() if parts.tls else null
 		if client.connect_to_host(parts.host, parts.port, tls) != OK:
 			return "connect"
 		var idle := 0.0
@@ -394,6 +439,11 @@ func _download_once(start_url: String, path: String, expected_size: int, report:
 			if idle > stall_seconds:
 				client.close()
 				return "timeout"
+		if client.get_status() == HTTPClient.STATUS_TLS_HANDSHAKE_ERROR:
+			client.close()
+			if switch_to_bundled_roots():
+				continue  # the same address again, with the game's own list
+			return "secure connection"
 		if client.get_status() != HTTPClient.STATUS_CONNECTED:
 			client.close()
 			return "connect"
@@ -442,7 +492,8 @@ func _download_once(start_url: String, path: String, expected_size: int, report:
 			return "dropped"
 		else:
 			client.close()
-			return "http"
+			# 1.1.1: a server hiccup (5xx) is tried again; a refusal (4xx) is not.
+			return "server %d" % code if code >= 500 else "http"
 		var total := expected_size
 		var length := int(client.get_response_body_length())
 		if length > 0:

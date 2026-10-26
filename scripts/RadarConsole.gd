@@ -1808,7 +1808,9 @@ func _on_check_done(result: Dictionary) -> void:
 	log_event("check now: %s" % _check_words(result))
 	refresh_about()
 	update_popup_source = "about"
-	if not bool(result.get("ok", false)):
+	if not bool(result.get("ok", false)) and bool(result.get("secure", false)):
+		update_popup.show_message("COULD NOT CHECK FOR UPDATES", "A secure connection to GitHub could not be made. Security software may be blocking it. Press CHECK NOW to try again later.")
+	elif not bool(result.get("ok", false)):
 		update_popup.show_message("COULD NOT CHECK FOR UPDATES", "The GitHub releases page could not be reached. Check the internet connection and press CHECK NOW again.")
 	elif bool(result.get("newer", false)):
 		if bool(result.get("missing_file", false)):
@@ -1822,11 +1824,16 @@ func _on_check_done(result: Dictionary) -> void:
 		controller.call("_after_context_change")
 
 func _check_words(result: Dictionary) -> String:
+	var words := ""
 	if not bool(result.get("ok", false)):
-		return "failed (%s)" % result.get("error", "")
-	if bool(result.get("newer", false)):
-		return "version %s available" % result.version
-	return "up to date"
+		words = "failed (%s)" % result.get("error", "")
+	elif bool(result.get("newer", false)):
+		words = "version %s available" % result.version
+	else:
+		words = "up to date"
+	if updater.use_bundled_roots:
+		words += " (with the game's list of trusted certificates)"
+	return words
 
 # ---------------- pop-up buttons ----------------
 func _on_update_later() -> void:
