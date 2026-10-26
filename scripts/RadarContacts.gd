@@ -1014,10 +1014,14 @@ var evade_outside := 0
 @export_range(1, 4) var stealth_nukes: int = 2
 ## Share of a large ship's full strength each nuke removes (0.5 = 3 of a Enemy Carrier's 6 hits).
 @export_range(0.1, 1.0) var stealth_nuke_strength: float = 0.5
-## Seconds between its two shots.
-@export_range(1.0, 15.0) var stealth_shot_seconds: float = 4.0
-## Distance from the target where it fires.
-@export_range(0.1, 0.8) var stealth_fire_range: float = 0.35
+## Seconds between its two shots (1.1.1: 3 s, was 4 s; it is still revealed by the first nuke).
+@export_range(1.0, 15.0) var stealth_shot_seconds: float = 3.0
+## Distance from the target where it fires, for both nukes and the PULSE BOMB drop
+## (1.1.1: 0.60, was 0.35, so it fires before it reaches the carriers and their drones).
+@export_range(0.1, 0.8) var stealth_fire_range: float = 0.60
+## 1.1.1: how much faster it turns on the way home once its weapons are away
+## (1.0 = the normal Interceptor turn; top speed unchanged). Stephen 2026-10-25.
+@export_range(1.0, 6.0) var stealth_home_turn: float = 3.0
 @export_range(0.1, 1.5) var stealth_nuke_speed: float = 0.5
 ## Rearm time after it lands safely, and the rebuild time after it is destroyed
 ## (no message or countdown is shown for either).
@@ -1899,7 +1903,8 @@ func _steer(ship: Dictionary, destination: Vector3, speed: float, delta: float) 
 	var limit := maxf(0.0, speed * movement_speed)
 	var desired := offset.normalized() * minf(limit, offset.length() * 2.0)
 	var velocity: Vector3 = ship.get("velocity", Vector3.ZERO)
-	velocity = velocity.move_toward(desired, fighter_acceleration * movement_speed * delta)
+	# 1.1.1: per-ship turn_scale (default 1.0); the Stealth Interceptor turns faster on the way home.
+	velocity = velocity.move_toward(desired, fighter_acceleration * float(ship.get("turn_scale", 1.0)) * movement_speed * delta)
 	ship.velocity = velocity.limit_length(limit)
 	ship.position += ship.velocity * delta
 
@@ -5091,6 +5096,7 @@ func _update_stealth(delta: float) -> void:
 				if ship.position.distance_to(target.position) <= stealth_fire_range and ship.shot_timer <= 0.0:
 					_fire_stealth_nuke(ship, target)
 		if ship.phase == "return":
+			ship.turn_scale = maxf(1.0, stealth_home_turn)
 			_steer(ship, launch_origin(0.0), speed, delta)
 			if ship.position.distance_to(launch_origin(0.0)) <= 0.03:
 				_remove_contact(ship.id)

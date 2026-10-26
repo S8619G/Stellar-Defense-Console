@@ -16,10 +16,11 @@ compatibility/default_parent_skeleton_in_mesh_instance_3d=true
 
 boot_splash/bg_color=Color(0, 0, 0, 1)
 boot_splash/image="res://assets/splash/stellar_defense_console_splash.png"
-boot_splash/minimum_display_time=4000
+boot_splash/minimum_display_time=0
 config/name="Stellar Defense Console"
 config/description="Stellar Defense Console tactical defense game (Windows, macOS, Linux)"
-config/version="1.1.0"
+config/version="1.1.1"
+config/release_date="2026-10-26"
 config/use_custom_user_dir=true
 config/custom_user_dir_name="Stellar Defense Console"
 run/main_scene="res://scenes/RadarConsole.tscn"

@@ -11,7 +11,7 @@ import signal
 HERE = Path(__file__).resolve().parent
 DEFAULT_GAME = HERE / "source/Stellar_Defense_Console"
 if not DEFAULT_GAME.exists():
-    DEFAULT_GAME = HERE
+    DEFAULT_GAME = HERE / "Stellar_Defense_Console"
 TESTS = [
     "test_rebrand", "test_v130_features", "test_v129_features", "test_v128_features",
     "test_v127_features", "test_v123_features", "test_v122_features", "test_v121_features",
@@ -25,9 +25,9 @@ TESTS = [
     "test_controller", "test_controller_status", "test_hull_percentage",
     "test_internal_names",
     "test_launch_readiness", "test_bonus_pick_input", "test_bonus_pick_round_end", "test_protect_convoy",
-    "test_damage_effects", "test_sdc_109", "test_sdc_110", "test_redraw_110"
+    "test_damage_effects", "test_sdc_109", "test_sdc_110", "test_redraw_110", "test_sdc_111"
 ]
-DISPLAY_TESTS = {"test_v103_features", "test_v105_features", "test_waves_update", "test_center_weapon_button", "test_hull_shield", "test_controller", "test_controller_status", "test_hull_percentage", "test_bonus_pick_input", "test_bonus_pick_round_end", "test_damage_effects", "test_sdc_109", "test_sdc_110", "test_redraw_110"}
+DISPLAY_TESTS = {"test_v103_features", "test_v105_features", "test_waves_update", "test_center_weapon_button", "test_hull_shield", "test_controller", "test_controller_status", "test_hull_percentage", "test_bonus_pick_input", "test_bonus_pick_round_end", "test_damage_effects", "test_sdc_109", "test_sdc_110", "test_redraw_110", "test_sdc_111"}
 
 def main():
     parser = argparse.ArgumentParser()

@@ -97,7 +97,7 @@ func _run() -> void:
 	quit(1 if failures else 0)
 
 func _versions_and_names() -> void:
-	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 1.1.0")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.1", "Project version is 1.1.1")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
 	var linux := ""
@@ -109,18 +109,18 @@ func _versions_and_names() -> void:
 		paths.append(path)
 		if str(presets.get_value(section, "platform", "")) == "Linux":
 			linux = path
-	check(linux.get_file() == "Stellar_Defense_Console_1.1.0_Linux.x86_64", "Linux file name keeps the full version (Stellar_Defense_Console_1.1.0_Linux.x86_64)")
-	check(linux.get_extension() == "x86_64" and linux.get_file().get_basename() == "Stellar_Defense_Console_1.1.0_Linux", "Linux extension is .x86_64, so the export dialog keeps the full version")
+	check(linux.get_file() == "Stellar_Defense_Console_1.1.1_Linux.x86_64", "Linux file name keeps the full version (Stellar_Defense_Console_1.1.1_Linux.x86_64)")
+	check(linux.get_extension() == "x86_64" and linux.get_file().get_basename() == "Stellar_Defense_Console_1.1.1_Linux", "Linux extension is .x86_64, so the export dialog keeps the full version")
 	var all_ok := paths.size() == 4
 	for path in paths:
-		if not str(path).get_file().begins_with("Stellar_Defense_Console_1.1.0_"):
+		if not str(path).get_file().begins_with("Stellar_Defense_Console_1.1.1_"):
 			all_ok = false
-	check(all_ok, "All four export file names start Stellar_Defense_Console_1.1.0_")
+	check(all_ok, "All four export file names start Stellar_Defense_Console_1.1.1_")
 	var versions_ok := true
 	for section in presets.get_sections():
 		for key in presets.get_section_keys(section):
 			if key.ends_with("file_version") or key.ends_with("product_version"):
-				versions_ok = versions_ok and presets.get_value(section, key) == "1.1.0"
+				versions_ok = versions_ok and presets.get_value(section, key) == "1.1.1"
 			elif key == "application/short_version" or key == "application/version":
-				versions_ok = versions_ok and presets.get_value(section, key) == "1.1.0"
-	check(versions_ok, "Windows and Mac version fields are 1.1.0")
+				versions_ok = versions_ok and presets.get_value(section, key) == "1.1.1"
+	check(versions_ok, "Windows and Mac version fields are 1.1.1")

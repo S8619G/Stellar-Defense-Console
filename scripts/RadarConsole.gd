@@ -29,6 +29,17 @@ const SessionLog = preload("res://scripts/SessionLog.gd")
 const ControllerInput = preload("res://scripts/ControllerInput.gd")
 const ControllerPanel = preload("res://scripts/ControllerPanel.gd")
 const DamageEffects = preload("res://scripts/DamageEffects.gd")
+## 1.1.1: in-place updates and the ABOUT tab.
+const UpdateCore = preload("res://scripts/UpdateCore.gd")
+const Updater = preload("res://scripts/Updater.gd")
+const UpdatePopup = preload("res://scripts/UpdatePopup.gd")
+## 1.1.1: what's new in this version (ABOUT tab). Short, plain lines.
+const WHATS_NEW: Array[String] = [
+	"Tabbed Settings: GAME, SYSTEM and ABOUT",
+	"Updates from the ABOUT tab, and a quiet check at startup",
+	"Stealth Interceptor fires from farther out",
+	"Second nuke 3 seconds after the first; faster turn home",
+]
 
 @export_group("Audio Mix")
 @export_range(-40.0, 0.0) var sweep_volume_db: float = -20.0
@@ -92,7 +103,7 @@ const DamageEffects = preload("res://scripts/DamageEffects.gd")
 @export_range(1.0, 30.0) var controller_check_delay: float = 3.0
 
 ## 1.08: the Settings version text opens this page.
-@export var github_url: String = ""
+@export var github_url: String = "https://github.com/S8619G/Stellar-Defense-Console"
 
 @export_group("High Scores")
 ## Saved in Godot's user data folder, so scores persist between runs.
@@ -177,6 +188,27 @@ var log_folder_opens: int = 0
 var github_opens: int = 0
 ## The last folder or page handed to the system (for tests).
 var last_shell_target: String = ""
+## 1.1.1: updates (scripts/Updater.gd) and the update pop-up.
+var updater: Node
+var update_popup: Control
+## The startup check holds the first battle (splash, then up to startup_extra_seconds).
+var startup_hold: bool = false
+var startup_check_running: bool = false
+var startup_splash: Control
+var startup_line: Label
+## Seconds the splash shows (the engine's own splash is now only shown while loading).
+@export var startup_splash_seconds: float = 4.0
+## The check may run on this long after the splash before the battle starts anyway.
+@export var startup_extra_seconds: float = 3.0
+## Tests: run the startup steps even though this console is not the running game.
+var startup_force: bool = false
+var startup_finished: bool = false
+var startup_popup_shown: bool = false
+var pending_release: Dictionary = {}
+var check_now_running: bool = false
+var updating: bool = false
+## Where the update pop-up came from: "startup" or "about".
+var update_popup_source: String = ""
 
 @onready var dome: Control = $CenterContainer/Dome
 @onready var tuning_panel: Panel = $TuningPanel
@@ -230,6 +262,8 @@ func _ready() -> void:
 	_build_controller()
 	# Only when this console is the running game (not inside a test script).
 	call_deferred("_fit_window_on_start")
+	# 1.1.1: splash, quiet update check and the good-start report after an update.
+	call_deferred("_begin_startup")
 	# 1.0.7: the Protect the convoy test start screen, only in the Convoy Test build.
 	if ConvoyTestPicker.wanted():
 		var picker := ConvoyTestPicker.new()
@@ -299,6 +333,7 @@ func _build_settings() -> void:
 	settings_panel.open_logs_requested.connect(open_log_folder)
 	settings_panel.open_github_requested.connect(open_github_page)
 	settings_panel.version_text = version_text()
+	_build_updates()
 	bonus_pick_panel = BonusPickPanel.new()
 	bonus_pick_panel.name = "BonusPickPanel"
 	add_child(bonus_pick_panel)
@@ -315,6 +350,9 @@ func _build_settings() -> void:
 	# 1.0.8: pop-ups stay above the score screen (which is above the damage effects).
 	for popup in [gear_button, settings_panel, bonus_pick_panel, controller_panel, tuning_panel]:
 		(popup as CanvasItem).z_index = 2
+	# 1.1.1: the update pop-up and the startup splash are in front of everything.
+	update_popup.z_index = 3
+	move_child(update_popup, -1)
 	# One line in Godot's log file per start, to help match a log to a build.
 	print("[RADAR] Stellar Defense Console %s | %s | difficulty %s | auto options %d | remember settings %s" % [
 		ProjectSettings.get_setting("application/config/version", "?"), OS.get_name(),
@@ -492,11 +530,17 @@ func toggle_settings() -> void:
 func open_settings() -> void:
 	if settings_open:
 		return
+	# 1.1.1: not over the startup splash or an update pop-up (answer that first).
+	if (is_instance_valid(update_popup) and update_popup.visible) or (is_instance_valid(startup_splash) and startup_splash.visible):
+		return
 	settings_open = true
-	_contacts_were_processing = contacts.is_processing()
+	# 1.1.1: the startup hold keeps the battle stopped; it restarts it when it ends.
+	_contacts_were_processing = contacts.is_processing() or startup_hold
 	contacts.set_process(false)
 	_pause_effects(true)
 	settings_panel.open(settings, contacts.active_difficulty)
+	settings_panel.set_paused_text("BATTLE OVER" if contacts.is_defeated() else ("STARTING" if startup_hold else "BATTLE PAUSED"))
+	refresh_about()
 	log_event("settings opened")
 
 func close_settings() -> void:
@@ -506,7 +550,7 @@ func close_settings() -> void:
 		controller_panel.close()
 	settings_open = false
 	settings_panel.visible = false
-	contacts.set_process(_contacts_were_processing)
+	contacts.set_process(_contacts_were_processing and not startup_hold and not (is_instance_valid(update_popup) and update_popup.visible and update_popup_source == "startup"))
 	_pause_effects(false)
 	gear_button.grab_focus()
 	log_event("settings closed")
@@ -1003,6 +1047,12 @@ func _input(event: InputEvent) -> void:
 	if event is InputEventKey or event is InputEventMouse or event is InputEventJoypadButton or event is InputEventScreenTouch or event is InputEventScreenDrag \
 			or (event is InputEventJoypadMotion and absf(event.axis_value) > 0.3):
 		note_activity()
+	# 1.1.1: Esc in the update pop-up is LATER, CANCEL or OK (never UPDATE NOW).
+	if is_instance_valid(update_popup) and update_popup.visible:
+		if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
+			update_popup.back()
+			get_viewport().set_input_as_handled()
+		return
 	# 1.0.0: Esc in the Controller panel cancels CHANGE, then goes back to Settings.
 	if is_instance_valid(controller_panel) and controller_panel.visible and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		controller_panel.back()
@@ -1509,3 +1559,359 @@ func _update_battle_readout() -> void:
 		pulse_readout.text = "PULSE BOMB  %d" % contacts.pulse_charges
 		pulse_readout.add_theme_color_override("font_color", contacts.emp_color)
 		pulse_readout.position = emp_readout.position + Vector2(0.0, emp_readout.get_line_height() + battle_readout.get_theme_constant("line_spacing"))
+
+# ------------------------------------------------------------------
+# 1.1.1: updates, the ABOUT tab and the startup check (BACKLOG "Settings redesign";
+# decisions asked one at a time, Stephen 2026-10-26)
+# ------------------------------------------------------------------
+func _build_updates() -> void:
+	updater = Updater.new()
+	updater.name = "Updater"
+	add_child(updater)
+	updater.check_done.connect(_on_check_done)
+	updater.progress.connect(func(done: int, total: int) -> void: update_popup.set_progress(done, total))
+	updater.stage_changed.connect(func(stage: String) -> void: update_popup.set_stage(stage, str(pending_release.get("version", ""))))
+	updater.install_failed.connect(_on_update_failed)
+	updater.quit_for_update.connect(_quit_for_update)
+	update_popup = UpdatePopup.new()
+	update_popup.name = "UpdatePopup"
+	add_child(update_popup)
+	update_popup.later_pressed.connect(_on_update_later)
+	update_popup.skip_pressed.connect(_on_update_skip)
+	update_popup.update_pressed.connect(start_update)
+	update_popup.cancel_pressed.connect(_on_update_cancel)
+	update_popup.ok_pressed.connect(_close_update_popup)
+	update_popup.go_back_confirmed.connect(start_go_back)
+	settings_panel.check_now_requested.connect(check_for_updates_now)
+	settings_panel.check_at_startup_changed.connect(func(on: bool) -> void:
+		updater.set_check_at_startup(on)
+		log_event("check at startup %s" % ("on" if on else "off")))
+	settings_panel.go_back_requested.connect(_on_go_back_requested)
+	refresh_about()
+	if updater.update_test_build:
+		for arg in OS.get_cmdline_args() + OS.get_cmdline_user_args():
+			if str(arg).begins_with("--sdc-update-test-press="):
+				_test_presses = Array(str(arg).substr(24).split(",", false))
+		if not _test_presses.is_empty():
+			_test_driver.call_deferred()
+
+## Update Test builds only (sandbox end-to-end runs without a mouse): presses the pop-up
+## buttons named in --sdc-update-test-press=update,ok,goback,confirm,later,skip,quit as
+## they appear, one second after each, the same as a click. Normal builds never read it.
+var _test_presses: Array = []
+func _test_driver() -> void:
+	while not _test_presses.is_empty() and is_inside_tree():
+		await get_tree().create_timer(1.0).timeout
+		var want := str(_test_presses[0])
+		var done := false
+		match want:
+			"update":
+				if update_popup.visible and update_popup.mode == "found" and not update_popup.update_button.disabled:
+					update_popup.update_button.pressed.emit()
+					done = true
+			"later", "skip":
+				if update_popup.visible and update_popup.mode == "found":
+					(update_popup.later_button if want == "later" else update_popup.skip_button).pressed.emit()
+					done = true
+			"ok":
+				if update_popup.visible and update_popup.mode == "message":
+					update_popup.ok_button.pressed.emit()
+					done = true
+			"goback":
+				if startup_finished and not update_popup.visible and updater.backup_version() != "":
+					contacts.hull = 0.0
+					_on_go_back_requested()
+					done = true
+			"confirm":
+				if update_popup.visible and update_popup.mode == "confirm":
+					update_popup.go_back_button.pressed.emit()
+					done = true
+			"quit":
+				if startup_finished and not update_popup.visible and not updating and not updater.finishing_after_update:
+					log_event("update test: quit")
+					get_tree().quit()
+					done = true
+		if done:
+			log_event("update test: pressed %s" % want)
+			_test_presses.pop_front()
+
+## What the ABOUT tab shows.
+func about_info() -> Dictionary:
+	var updates: bool = updater.updates_available_here()
+	var line: Dictionary = updater.status_line()
+	var build := UpdateCore.build_label(updater.platform())
+	if updater.update_test_build:
+		build += "   |   UPDATE TEST"
+	var info := {
+		"version": str(ProjectSettings.get_setting("application/config/version", "?")),
+		"build": build,
+		"date": str(ProjectSettings.get_setting("application/config/release_date", "")),
+		"status": line.text,
+		"status_good": line.good,
+		"checking": check_now_running,
+		"check_at_startup": updater.check_at_startup(),
+		"backup_version": updater.backup_version(),
+		"updates": updates,
+		"news": WHATS_NEW,
+		"github": not github_url.is_empty(),
+	}
+	if updater.steam_build:
+		info.build = "STEAM   |   " + build
+		info.status = "Steam keeps this copy up to date."
+		info.status_good = true
+		info.updates_note = ""
+	return info
+
+func refresh_about() -> void:
+	if is_instance_valid(settings_panel) and is_instance_valid(updater):
+		settings_panel.set_about(about_info())
+
+## UPDATE NOW and GO BACK work only between battles: while the first battle is held at
+## startup, or on the Game Over screen (Stephen 2026-10-26).
+func between_battles() -> bool:
+	return startup_hold or contacts.is_defeated()
+
+# ---------------- startup ----------------
+func _begin_startup() -> void:
+	if not startup_force and (not is_inside_tree() or get_tree().current_scene != self):
+		return
+	if updater.confirm_token != "":
+		# Started by an update: report a good start once running, then tidy up.
+		get_tree().create_timer(updater.confirm_after_seconds).timeout.connect(updater.confirm_started)
+	else:
+		updater.tidy_pending()
+	updater.clear_note_if_other_version()
+	startup_hold = true
+	contacts.set_process(false)
+	_show_startup_splash()
+	var want_check: bool = updater.updates_available_here() and updater.check_at_startup() \
+			and updater.confirm_token == "" and not ConvoyTestPicker.wanted()
+	# The engine's own splash already showed while loading; keep about 4 seconds in all.
+	var splash_left := maxf(0.5, startup_splash_seconds - Time.get_ticks_msec() / 1000.0) if not startup_force else startup_splash_seconds
+	if want_check:
+		startup_check_running = true
+		log_event("startup update check")
+		updater.check(splash_left + startup_extra_seconds)
+	await get_tree().create_timer(splash_left).timeout
+	_hide_startup_splash()
+	if startup_check_running:
+		startup_line.visible = true
+		var waited := 0.0
+		while startup_check_running and waited < startup_extra_seconds:
+			await get_tree().create_timer(0.1).timeout
+			waited += 0.1
+		startup_line.visible = false
+		if startup_check_running:
+			startup_check_running = false
+			updater.cancel_check()
+			log_event("startup update check: no answer in time")
+	startup_finished = true
+	var r: Dictionary = updater.last_result if want_check else {}
+	if bool(r.get("ok", false)) and bool(r.get("newer", false)) and not bool(r.get("missing_file", false)) \
+			and str(r.get("version", "")) != updater.skipped_version():
+		pending_release = r
+		update_popup_source = "startup"
+		startup_popup_shown = true
+		update_popup.show_found(r, _running_version(), UpdateCore.build_label(updater.platform()), true)
+		log_event("startup: version %s offered" % r.version)
+		if is_instance_valid(controller):
+			controller.call("_after_context_change")
+	else:
+		release_startup_hold()
+
+## Lets the first battle start (after the startup check or its pop-up).
+func release_startup_hold() -> void:
+	if not startup_hold:
+		return
+	startup_hold = false
+	if settings_open:
+		_contacts_were_processing = true
+		settings_panel.set_paused_text("BATTLE PAUSED")
+	elif not bonus_pick_open:
+		contacts.set_process(true)
+	log_event("battle starts")
+
+func _show_startup_splash() -> void:
+	if not is_instance_valid(startup_splash):
+		startup_splash = Control.new()
+		startup_splash.name = "StartupSplash"
+		startup_splash.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		startup_splash.mouse_filter = Control.MOUSE_FILTER_STOP
+		var black := ColorRect.new()
+		black.color = Color(0, 0, 0, 1)
+		black.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		black.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		startup_splash.add_child(black)
+		var picture := TextureRect.new()
+		picture.texture = load(str(ProjectSettings.get_setting("application/boot_splash/image", "")))
+		picture.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+		picture.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		picture.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		picture.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		startup_splash.add_child(picture)
+		# Own top layer, so it always fills the window whatever the console layout is doing.
+		var layer := CanvasLayer.new()
+		layer.name = "StartupLayer"
+		layer.layer = 90
+		add_child(layer)
+		layer.add_child(startup_splash)
+		startup_line = Label.new()
+		startup_line.name = "StartupCheckLine"
+		startup_line.text = "CHECKING FOR UPDATES"
+		startup_line.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		startup_line.add_theme_font_size_override("font_size", 20)
+		startup_line.add_theme_color_override("font_color", Color("#b9a8b2"))
+		startup_line.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+		startup_line.add_theme_constant_override("outline_size", 6)
+		# Full window width, centred in the (still empty) radar.
+		startup_line.anchor_left = 0.0
+		startup_line.anchor_right = 1.0
+		startup_line.anchor_top = 0.0
+		startup_line.anchor_bottom = 0.0
+		startup_line.offset_left = 0.0
+		startup_line.offset_right = 0.0
+		startup_line.offset_top = 465.0
+		startup_line.offset_bottom = 495.0
+		startup_line.visible = false
+		startup_line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		layer.add_child(startup_line)
+	startup_splash.modulate.a = 1.0
+	startup_splash.visible = true
+
+func _hide_startup_splash() -> void:
+	if not is_instance_valid(startup_splash):
+		return
+	var fade := create_tween()
+	fade.tween_property(startup_splash, "modulate:a", 0.0, 0.25)
+	fade.tween_callback(func() -> void: startup_splash.visible = false)
+
+func _running_version() -> String:
+	return str(ProjectSettings.get_setting("application/config/version", "?"))
+
+# ---------------- CHECK NOW ----------------
+func check_for_updates_now() -> void:
+	if check_now_running or updating or not updater.updates_available_here():
+		return
+	check_now_running = true
+	log_event("check now")
+	refresh_about()
+	updater.check()
+
+func _on_check_done(result: Dictionary) -> void:
+	if startup_check_running:
+		startup_check_running = false
+		log_event("startup update check: %s" % _check_words(result))
+		return
+	if not check_now_running:
+		return
+	check_now_running = false
+	log_event("check now: %s" % _check_words(result))
+	refresh_about()
+	update_popup_source = "about"
+	if not bool(result.get("ok", false)):
+		update_popup.show_message("COULD NOT CHECK FOR UPDATES", "The GitHub releases page could not be reached. Check the internet connection and press CHECK NOW again.")
+	elif bool(result.get("newer", false)):
+		if bool(result.get("missing_file", false)):
+			update_popup.show_message("UPDATE FILE NOT READY", "Version %s is on the GitHub releases page, but the file for this computer is not there yet. Try again later." % result.version)
+		else:
+			pending_release = result
+			update_popup.show_found(result, _running_version(), UpdateCore.build_label(updater.platform()), between_battles())
+	else:
+		return
+	if is_instance_valid(controller):
+		controller.call("_after_context_change")
+
+func _check_words(result: Dictionary) -> String:
+	if not bool(result.get("ok", false)):
+		return "failed (%s)" % result.get("error", "")
+	if bool(result.get("newer", false)):
+		return "version %s available" % result.version
+	return "up to date"
+
+# ---------------- pop-up buttons ----------------
+func _on_update_later() -> void:
+	log_event("update later")
+	_close_update_popup()
+
+func _on_update_skip() -> void:
+	updater.skip_version(str(pending_release.get("version", "")))
+	log_event("skip version %s" % pending_release.get("version", ""))
+	_close_update_popup()
+
+func _close_update_popup() -> void:
+	update_popup.close()
+	if update_popup_source == "startup":
+		release_startup_hold()
+	update_popup_source = "about" if settings_open else ""
+	refresh_about()
+	if is_instance_valid(controller):
+		controller.call("_after_context_change")
+
+func _on_update_cancel() -> void:
+	if update_popup.mode == "working":
+		updater.cancel()
+		log_event("update cancelled")
+	else:
+		_close_update_popup()
+
+## UPDATE NOW: a high score is saved first; settings are saved; then the updater runs.
+func start_update() -> void:
+	if updating or not between_battles() or pending_release.is_empty():
+		return
+	if entry_active:
+		submit_initials()
+	settings_saved = GameSettings.save_settings(settings_file, settings)
+	updating = true
+	log_event("update to %s" % pending_release.get("version", ""))
+	update_popup.show_working(str(pending_release.version), pending_release, _running_version(), UpdateCore.build_label(updater.platform()))
+	if is_instance_valid(controller):
+		controller.call("_after_context_change")
+	var why: String = await updater.update_to(pending_release)
+	updating = false
+	log_event("update result: %s" % ("starting new version" if why == "" else why))
+	if why == "cancelled":
+		_close_update_popup()
+
+func _on_go_back_requested() -> void:
+	var version: String = updater.backup_version()
+	if version == "":
+		return
+	update_popup_source = "startup" if startup_hold else "about"
+	if not between_battles():
+		update_popup.show_message("FINISH THE BATTLE FIRST", "GO BACK works when the battle is over (Game Over screen), or right after the game starts.")
+	else:
+		update_popup.show_confirm_go_back(version)
+	if is_instance_valid(controller):
+		controller.call("_after_context_change")
+
+func start_go_back() -> void:
+	var version: String = updater.backup_version()
+	if updating or not between_battles() or version == "":
+		return
+	if entry_active:
+		submit_initials()
+	settings_saved = GameSettings.save_settings(settings_file, settings)
+	updating = true
+	log_event("go back to %s" % version)
+	update_popup.show_working(version, {}, _running_version(), UpdateCore.build_label(updater.platform()))
+	update_popup.title.text = "GOING BACK TO %s" % version
+	update_popup.set_stage("STARTING", version)
+	var why: String = await updater.go_back()
+	updating = false
+	log_event("go back result: %s" % ("starting" if why == "" else why))
+
+func _on_update_failed(title: String, text: String) -> void:
+	log_event("update stopped: %s" % title)
+	update_popup.show_message(title, text)
+	refresh_about()
+	if is_instance_valid(controller):
+		controller.call("_after_context_change")
+
+func _quit_for_update() -> void:
+	settings_saved = GameSettings.save_settings(settings_file, settings)
+	quit_requests += 1
+	if is_instance_valid(session_log) and not quit_dry_run:
+		session_log.stop("update")
+	if quit_dry_run:
+		return
+	get_tree().quit()

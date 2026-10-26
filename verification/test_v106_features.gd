@@ -109,14 +109,14 @@ func _run() -> void:
 	clean()
 
 	# --- Full build naming ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 1.06")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.1", "Project version is 1.06")
 	check(not console.test_build, "Test Build is off by default (full build)")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text reads STELLAR DEFENSE CONSOLE 1.06 (no TEST)")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.1", "Version text reads STELLAR DEFENSE CONSOLE 1.06 (no TEST)")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.1.0", "Export presets name 1.06 files (no Test)")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.1.1", "Export presets name 1.06 files (no Test)")
 
 	# --- Hover tooltips off by default ---
 	await frames(2)
@@ -151,46 +151,51 @@ func _run() -> void:
 			row_texts.append((child as Button).text)
 	check(not row_texts.has("DIAGNOSTIC LOG") and not row_texts.has("OPEN LOG FOLDER"), "DIAGNOSTIC LOG row and OPEN LOG FOLDER button removed")
 	check(not ("open_logs_button" in panel), "No OPEN LOG FOLDER button in the panel code")
-	check(panel.PANEL_SIZE == Vector2(860, 1054), "Panel is 1054 px tall (1.0.8: one row added for SCREEN EFFECTS; 1.1.0: one more for FRAME RATE)")
-	var link: LinkButton = panel.version_label
-	check(link is LinkButton and link.text == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text is a link reading STELLAR DEFENSE CONSOLE 1.06")
-	var link_rect := Rect2(link.get_global_position() - panel.panel.get_global_position(), link.size)
-	# 1.08: the version text and the "!" icon beside it are centered together.
-	var icon_rect := Rect2(panel.log_icon_button.get_global_position() - panel.panel.get_global_position(), panel.log_icon_button.size)
-	var row_rect := link_rect.merge(icon_rect)
-	check(absf(row_rect.get_center().x - panel.PANEL_SIZE.x * 0.5) <= 1.5, "Version link is centered on the panel (%.1f vs %.1f)" % [row_rect.get_center().x, panel.PANEL_SIZE.x * 0.5])
-	var close_rect := rect_of(panel.close_button)
-	check(link_rect.position.y >= close_rect.end.y and link_rect.end.y <= panel.PANEL_SIZE.y, "Version link sits below the bottom buttons, inside the panel")
-	check(link.get_theme_font_size("font_size") <= 16 and link.get_theme_color("font_color").a <= 0.7, "Version link stays small and dim")
-	check(link.underline == LinkButton.UNDERLINE_MODE_ON_HOVER, "Version link underlines on hover, so it reads as a link")
+	# 1.1.1: the Settings redesign (GAME / SYSTEM / ABOUT tabs) replaced the long panel and
+	# the small version link. The version is now on the ABOUT tab, with GITHUB PAGE and
+	# DATA FOLDER buttons in place of the link and the "!" icon.
+	check(panel.PANEL_SIZE == Vector2(860, 800), "Panel is 860 x 800 with tabs (1.1.1 Settings redesign)")
+	panel.show_tab(2)
+	await frames(1)
+	check(panel.about_version.text == "VERSION 1.1.1" and panel.about_name.text == "STELLAR DEFENSE CONSOLE", "ABOUT tab shows STELLAR DEFENSE CONSOLE, VERSION 1.1.1")
 	var opens: int = console.log_folder_opens
-	panel.log_icon_button.pressed.emit()  # 1.08: the "!" icon opens the folder; the version text opens GitHub.
-	check(console.log_folder_opens == opens + 1, "Clicking the version link opens the log folder (dry run in tests)")
-	check(String(panel.log_icon_button.get_meta("hover_tip", "")).contains("log") and link.tooltip_text.is_empty(), "Version link help text kept but not popped up")
-	var buttons: Array[Control] = []
-	var labels: Array[Label] = []
-	for child in panel.panel.get_children():
-		if child is Button:
-			buttons.append(child)
-		elif child is Label:
-			labels.append(child)
-	buttons.append(link)
-	var overlaps := 0
-	for i in range(buttons.size()):
-		for j in range(i + 1, buttons.size()):
-			var a := link_rect if buttons[i] == link else rect_of(buttons[i])
-			var b2 := link_rect if buttons[j] == link else rect_of(buttons[j])
-			if a.intersects(b2):
-				overlaps += 1
-	for label in labels:
-		if label.text == "" or not label.visible:
-			continue
-		for button in buttons:
-			var r := link_rect if button == link else rect_of(button)
-			if text_rect(label).intersects(r):
-				overlaps += 1
-	check(overlaps == 0, "Settings panel: no overlapping buttons or text (%d controls)" % buttons.size())
-	check(panel.panel.position.y >= 0.0 and panel.PANEL_SIZE.y <= 1060.0, "Settings panel fits the 1080-pixel layout (1.1.0: at least 10 px above and below)")
+	panel.data_button.pressed.emit()
+	check(console.log_folder_opens == opens + 1, "DATA FOLDER opens the log folder (dry run in tests)")
+	check(String(panel.data_button.get_meta("hover_tip", "")).contains("log") and panel.data_button.tooltip_text.is_empty(), "DATA FOLDER help text kept but not popped up")
+	var tab_overlaps := 0
+	var counted := 0
+	for t in range(3):
+		panel.show_tab(t)
+		await frames(1)
+		var buttons: Array[Rect2] = []
+		var texts: Array[Rect2] = []
+		for node in panel.panel.find_children("*", "Control", true, false):
+			var ctl := node as Control
+			if not ctl.is_visible_in_tree():
+				continue
+			var r := Rect2(ctl.get_global_position() - panel.panel.get_global_position(), ctl.size)
+			if ctl is Button:
+				buttons.append(r)
+			elif ctl is Label and (ctl as Label).text != "" and not (ctl as Label).autowrap_mode:
+				var lab := ctl as Label
+				var w := lab.get_theme_font("font").get_string_size(lab.text, HORIZONTAL_ALIGNMENT_LEFT, -1, lab.get_theme_font_size("font_size")).x
+				var x := r.position.x
+				if lab.horizontal_alignment == HORIZONTAL_ALIGNMENT_RIGHT:
+					x = r.end.x - w
+				elif lab.horizontal_alignment == HORIZONTAL_ALIGNMENT_CENTER:
+					x = r.get_center().x - w * 0.5
+				texts.append(Rect2(x + 1, r.position.y + 2, maxf(w - 2, 1), maxf(r.size.y - 4, 1)))
+		counted += buttons.size()
+		for i in range(buttons.size()):
+			for j in range(i + 1, buttons.size()):
+				if buttons[i].intersects(buttons[j]):
+					tab_overlaps += 1
+			for tr in texts:
+				if tr.intersects(buttons[i]):
+					tab_overlaps += 1
+	check(tab_overlaps == 0, "Settings panel: no overlapping buttons or text on any tab (%d controls)" % counted)
+	check(panel.panel.position.y >= 0.0 and panel.PANEL_SIZE.y <= 1060.0, "Settings panel fits the 1080-pixel layout")
+	panel.show_tab(0)
 	console.close_settings()
 
 	# --- Missiles and nukes on top ---

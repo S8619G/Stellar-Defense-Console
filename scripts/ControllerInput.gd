@@ -116,6 +116,9 @@ func set_bindings(new_bindings: Dictionary) -> void:
 func context() -> String:
 	if not is_instance_valid(console):
 		return "none"
+	# 1.1.1: the update pop-up is in front of everything.
+	if "update_popup" in console and is_instance_valid(console.update_popup) and console.update_popup.visible:
+		return "update"
 	var panel: Control = console.controller_panel
 	if is_instance_valid(panel) and panel.visible:
 		if panel.is_picking():
@@ -130,7 +133,7 @@ func context() -> String:
 	return "battle"
 
 func is_menu_context(name: String) -> bool:
-	return name in ["controller", "picker", "settings", "bonus", "game_over"]
+	return name in ["controller", "picker", "settings", "bonus", "game_over", "update"]
 
 ## Controls the highlight can move between on the current screen.
 func targets() -> Array[Control]:
@@ -138,6 +141,8 @@ func targets() -> Array[Control]:
 	match context():
 		"controller", "picker":
 			found = console.controller_panel.focus_targets()
+		"update":
+			found = console.update_popup.focus_targets()
 		"settings":
 			for node in console.settings_panel.panel.find_children("*", "", true, false):
 				if (node is BaseButton or node is HSlider) and node.is_visible_in_tree() and node.focus_mode != Control.FOCUS_NONE:
@@ -311,11 +316,15 @@ func _press(id: String) -> void:
 		_on_menu(where)
 		return
 	match where:
-		"controller", "picker", "settings", "bonus", "game_over":
+		"controller", "picker", "settings", "bonus", "game_over", "update":
 			if id == "a":
 				activate(current_target())
 			elif id == "b":
 				_back(where)
+			elif where == "settings" and (id == "lb" or id == "rb"):
+				# 1.1.1: LB / RB switch the Settings tabs.
+				console.settings_panel.step_tab(-1 if id == "lb" else 1)
+				_after_context_change()
 		"initials":
 			if id == "a":
 				console.submit_initials()
@@ -355,6 +364,8 @@ func _on_menu(where: String) -> void:
 			console.close_settings()
 		"bonus":
 			pass  # the pick must be answered (or times out); Settings stays closed
+		"update":
+			pass  # 1.1.1: the update pop-up must be answered first
 		_:
 			console.toggle_settings()
 	_after_context_change()
@@ -365,6 +376,8 @@ func _back(where: String) -> void:
 			console.controller_panel.back()
 		"settings":
 			console.close_settings()
+		"update":
+			console.update_popup.back()
 	_after_context_change()
 
 func _after_context_change() -> void:

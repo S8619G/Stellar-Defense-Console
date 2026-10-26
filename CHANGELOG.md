@@ -1,5 +1,35 @@
 # Stellar Defense Console changelog
 
+## 1.1.1
+
+### Settings redesign
+
+- Settings is now one panel with three tabs: GAME, SYSTEM and ABOUT. LB and RB on a controller switch tabs.
+- GAME: difficulty, the auto options and the score multiplier.
+- SYSTEM: volumes, screen effects, frame rate, the controller page and REMEMBER SETTINGS.
+- ABOUT: the version panel (version number, build, release date), the result of the last update check, CHECK NOW, CHECK AT STARTUP (ON or OFF), what is new in this version, the GitHub page and the data folder (settings, scores and logs).
+
+### Updates from GitHub
+
+- At startup the game checks the GitHub releases page quietly while the splash shows (about 4 seconds). If the check is not finished by then, the first battle waits up to 3 more seconds with CHECKING FOR UPDATES in the middle of the radar. Without an answer the battle starts and nothing is shown.
+- If a newer version is found, a pop-up shows the version, its release date, its size and what is new, with three buttons: LATER (ask again next start), SKIP THIS VERSION (do not ask again for this version) and UPDATE NOW.
+- CHECK NOW on the ABOUT tab checks at any time. During a battle UPDATE NOW is greyed out until the Game Over screen.
+- UPDATE NOW downloads the file for this computer (Windows x64, Windows ARM64, Mac or Linux), checks it against SHA256SUMS.txt, swaps it in place with the same file name and location, and reopens the game. A dropped connection is resumed. Settings and high scores are kept.
+- If the new version does not start, the old one is put back and keeps running. If the download does not match its checksum or does not finish, nothing is changed.
+- The previous version is kept as one backup. GO BACK on the ABOUT tab (with a confirm pop-up) returns to it; that newer version is then skipped at startup, and CHECK NOW still offers it.
+- Windows and Linux: if the game's folder is protected, the system's permission prompt is shown; without permission a plain message says nothing was changed.
+- Mac: if the game is running from a temporary hidden copy (opened straight from Downloads), a message asks to move it to the Applications folder first.
+- CHECK AT STARTUP OFF stops the startup check; CHECK NOW still works.
+- Steam copies are updated by Steam; the ABOUT tab says so and the game does not check GitHub.
+
+### Stealth Interceptor
+
+- Fires its nukes from about 1.7 times as far away from the target as before.
+- The second nuke follows 3 seconds after the first (it was 4 seconds).
+- After its last shot it turns for home 3 times as fast.
+- The PULSE BOMB run is unchanged.
+
+
 ## 1.1.0
 
 ### Top message bar
@@ -99,7 +129,7 @@
 
 ## 1.0.8
 
-1.0.8 brings the new Protect the convoy round and new damage effects. It also includes all changes from 1.0.2 to 1.0.6, which were not released separately.
+1.0.8 is the first full version since 1.0.6. It brings the new Protect the convoy round (play-tested in the 1.0.7, 1.0.7.1 and 1.0.7.2 test builds) and new damage effects.
 
 ### Damage effects
 
@@ -193,8 +223,6 @@ The round between sets (called Protect the fleet in 1.0.6) is now Protect the co
 - Gameplay, button assignments, keyboard, mouse and touch are unchanged.
 
 ## 1.0.1
-
-First public release.
 
 - Exports no longer need the S3TC/BPTC texture setting turned on by hand; it is saved in the project.
 - "Export With Debug" starts unchecked, so exports are release builds by default.

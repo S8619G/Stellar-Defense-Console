@@ -221,7 +221,8 @@ func _idle_and_frame_rate() -> void:
 	check(saved.load(console.settings_file) == OK and bool(saved.get_value("settings", "smooth_frame_rate", false)), "FRAME RATE is saved with the settings")
 	console.settings_panel.frame_rate_button.button_pressed = false
 	var panel_rect := Rect2(console.settings_panel.panel.position, console.settings_panel.panel.size)
-	check(panel_rect.size.y == 1054.0, "Settings panel one row taller (1054)")
+	# 1.1.1: the tabbed redesign replaced the tall single panel with one 860 x 800 panel.
+	check(panel_rect.size == Vector2(860, 800), "Settings panel is the 1.1.1 tabbed size (860 x 800)")
 	# Settings open (the pause) = idle screen.
 	console.open_settings()
 	console._process(0.0)

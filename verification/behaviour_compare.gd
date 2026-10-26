@@ -35,9 +35,16 @@ func _battle(difficulty: int, seed: int, autos: bool) -> String:
 				c.set(n, true)
 	# 1.1.0: CMP_SET_BACK=1 puts the 1.1.0 gameplay settings back to 1.0.9 values (no-op
 	# on versions without them), to show nothing else changed.
+	# 1.1.1: the three Stealth Interceptor settings go back to their 1.1.0 values with either
+	# CMP_SET_BACK=1 (everything back to 1.0.9) or CMP_STEALTH_BACK=1 (only these three, to
+	# show 1.1.1 matches 1.1.0 otherwise).
+	var stealth_back := [["stealth_fire_range", 0.35], ["stealth_shot_seconds", 4.0], ["stealth_home_turn", 1.0]]
 	if OS.get_environment("CMP_SET_BACK") == "1":
 		for pair in [["jump_score_percent", 0.0], ["rapid_repair_limit_easy", 0], ["rapid_repair_limit", 0],
-				["interceptors_hacking_breachers_first", false], ["pulse_bomb_enabled", false]]:
+				["interceptors_hacking_breachers_first", false], ["pulse_bomb_enabled", false]] + stealth_back:
+			c.set(pair[0], pair[1])
+	elif OS.get_environment("CMP_STEALTH_BACK") == "1":
+		for pair in stealth_back:
 			c.set(pair[0], pair[1])
 	c.rng.seed = seed
 	c.reset_battle()

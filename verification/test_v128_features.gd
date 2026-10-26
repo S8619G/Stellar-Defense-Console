@@ -94,14 +94,14 @@ func _run() -> void:
 	c.ship_missiles_target_nukes = false
 
 	# ---------------- Version ----------------
-	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 0.1.2")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text reads STELLAR DEFENSE CONSOLE 1.1.0")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.1", "Project version is 0.1.2")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.1", "Version text reads STELLAR DEFENSE CONSOLE 1.1.1")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.1.0"
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.0", "Export presets name 0.1.2 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.1.1"
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.1", "Export presets name 0.1.2 files")
 
 	# ---------------- Splash screen ----------------
 	var splash_path := "res://assets/splash/stellar_defense_console_splash.png"
@@ -109,7 +109,11 @@ func _run() -> void:
 	check(ProjectSettings.get_setting("application/boot_splash/image", "") == splash_path, "Boot splash image is %s" % splash_path)
 	var bg: Color = ProjectSettings.get_setting("application/boot_splash/bg_color", Color.WHITE)
 	check(bg.is_equal_approx(Color(0, 0, 0, 1)), "Boot splash background is black (%s)" % bg)
-	check(int(ProjectSettings.get_setting("application/boot_splash/minimum_display_time", 0)) == 4000, "Splash stays up at least 4,000 ms")
+	# 1.1.1: the 4-second splash is now shown inside the game (same picture), so the quiet update
+	# check can run while it is up; the engine's own boot splash no longer waits on top of it.
+	check(int(ProjectSettings.get_setting("application/boot_splash/minimum_display_time", -1)) == 0, "Engine splash hands over to the in-game splash at once (1.1.1)")
+	var radar_src: String = FileAccess.get_file_as_string("res://scripts/RadarConsole.gd")
+	check(radar_src.contains("@export var startup_splash_seconds: float = 4.0"), "Splash stays up at least 4,000 ms (in-game splash, 1.1.1)")
 	check(ProjectSettings.get_setting("application/boot_splash/use_filter", false) == true, "Splash is drawn with smooth filtering")
 	if ProjectSettings.has_setting("application/boot_splash/fit_image"):
 		check(ProjectSettings.get_setting("application/boot_splash/fit_image") == true, "Splash fits the window, keeping its shape (Godot 4.4 setting)")

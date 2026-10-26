@@ -139,14 +139,14 @@ func _run() -> void:
 	c.battle_event.connect(on_event)
 
 	# --- Version 1.2.2 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 1.2.2")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text reads STELLAR DEFENSE CONSOLE 1.1.0")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.1", "Project version is 1.2.2")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.1", "Version text reads STELLAR DEFENSE CONSOLE 1.1.1")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.0"
-		and presets.get_value("preset.1.options", "application/version", "") == "1.1.0", "Export presets name 1.2.2 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.1"
+		and presets.get_value("preset.1.options", "application/version", "") == "1.1.1", "Export presets name 1.2.2 files")
 
 	# --- Item 1: wave tally border ---
 	check(is_equal_approx(c.rest_tally_border_width, 3.0), "Wave tally border is 3 px (was 1), an Inspector value")

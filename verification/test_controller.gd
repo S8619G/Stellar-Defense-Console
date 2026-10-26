@@ -350,9 +350,19 @@ func _dead_zone_and_repeat() -> void:
 
 func _settings_and_panel() -> void:
 	var launches := count("launch")
+	var jumps := count("jump")
 	tap(JOY_BUTTON_START)
 	check(console.settings_open and pad.context() == "settings", "MENU opens Settings")
 	check(pad.highlight_shown() and pad.current_target() != null, "Settings shows a controller highlight")
+	# 1.1.1: Settings opens on the GAME tab; RB steps to SYSTEM, where CONTROLLER now is.
+	check(console.settings_panel.tab_index == 0, "Settings opens on the GAME tab (1.1.1)")
+	tap(JOY_BUTTON_RIGHT_SHOULDER)
+	check(console.settings_panel.tab_index == 1 and console.settings_panel.controller_button.is_visible_in_tree(), "RB steps to the SYSTEM tab (1.1.1)")
+	check(pad.current_target() != null and pad.current_target().is_visible_in_tree(), "Highlight moves onto the SYSTEM tab")
+	tap(JOY_BUTTON_LEFT_SHOULDER)
+	check(console.settings_panel.tab_index == 0, "LB steps back to the GAME tab (1.1.1)")
+	tap(JOY_BUTTON_RIGHT_SHOULDER)
+	check(count("launch") == launches and count("jump") == jumps and c.is_processing() == false, "LB / RB in Settings never jump or launch")
 	# A in Settings presses the highlighted control, never Launch Interceptors.
 	pad.target = console.settings_panel.controller_button
 	tap(JOY_BUTTON_A)

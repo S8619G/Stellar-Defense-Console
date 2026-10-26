@@ -9,7 +9,7 @@ A tactical space defense game for Windows (x64 and arm64), Mac (Apple M-series a
 - An animated 3D radar dome with a sweep pulse and original synthesized audio.
 - Defined waves in sets, with rising threats, a score multiplier and bonuses.
 - Protect the convoy rounds between sets, where Interceptors defend a support fleet from Attack Drones and a hull-draining Breacher, helped by a Repair Tender.
-- Damage effects: a nuke hit scrambles the console screen, and losing the ship brings up a red SYSTEMS OFFLINE screen before the score screen. The scramble and the low hull flicker can be switched off in Settings (SCREEN EFFECTS).
+- Damage effects: a nuke hit scrambles the console screen, and losing the ship brings up a red SYSTEMS OFFLINE screen before the score screen. The scramble and the low hull flicker can be switched off in Settings > SYSTEM (SCREEN EFFECTS).
 - A console frame with an alert box, NAV DATA and a hull gauge with percentage. Below 6% hull, the HULL bar flashes red and the screen flickers lightly.
 - Interceptor squadrons, Gunships, a Stealth Interceptor special weapon with nukes or a PULSE BOMB that freezes enemies, Rapid Repair and Jump.
 - A breach alert: while a Breacher is hacking the ship, the ship fill flashes red and black stripes and NAV DATA shows INTRUSION DETECTION.
@@ -17,6 +17,8 @@ A tactical space defense game for Windows (x64 and arm64), Mac (Apple M-series a
 - Easy, Normal and Hard difficulty, and optional automatic modes.
 - High scores with per-battle stats; settings saved on the computer.
 - Game controller support with remappable buttons.
+- Settings in three tabs: GAME (difficulty and automatic modes), SYSTEM (sound, screen, controller) and ABOUT (version, updates and what is new).
+- In-game updates from this page: the game checks for a newer version at startup and can download, check and swap it in place, keeping the previous version for GO BACK.
 
 ![SYSTEMS OFFLINE screen with the score screen in front](docs/screenshots/systems_offline.png)
 
@@ -39,9 +41,15 @@ Ready-to-play copies are on the [Releases](https://github.com/S8619G/Stellar-Def
 
 No installation or extra software is needed.
 
+## Updates
+
+At startup, the game checks this page for a newer version. If one is available, a message offers LATER, SKIP THIS VERSION and UPDATE NOW. UPDATE NOW downloads the new version, checks it against `SHA256SUMS.txt`, swaps it in place under the same file name and reopens the game; settings and high scores are kept. If anything goes wrong, the current version stays. The previous version is kept, and **Settings > ABOUT > GO BACK** returns to it. The startup check can be switched off with **CHECK AT STARTUP** on the ABOUT tab, and **CHECK NOW** checks at any time. If the game sits in a protected folder, the computer asks for permission first. On a Mac, if the app is still in the Downloads folder or another temporary place, the game asks to move it to Applications first.
+
+The in-game updater looks for the exact file names listed above, so release files keep these names.
+
 On Windows laptops with two graphics chips, Windows chooses which one the game uses, usually the low-power one. To use the powerful card, open **Windows Settings > System > Display > Graphics**, or the Nvidia or AMD control panel, and choose it for the game.
 
-**Photosensitivity warning:** the game contains flashing lights, full-screen flashes, screen scramble and flicker effects, and pulsing images. The screen scramble and the low hull flicker can be switched off in **Settings > SCREEN EFFECTS**. See [NOTICE.md](NOTICE.md) before playing.
+**Photosensitivity warning:** the game contains flashing lights, full-screen flashes, screen scramble and flicker effects, and pulsing images. The screen scramble and the low hull flicker can be switched off in **Settings > SYSTEM > SCREEN EFFECTS**. See [NOTICE.md](NOTICE.md) before playing.
 
 ## Controls
 
@@ -49,7 +57,7 @@ Click or tap the console buttons along the bottom of the screen: RAPID REPAIR, J
 
 ### Game controller
 
-Xbox-style and PlayStation-style controllers are supported. Buttons can be changed in **Settings > CONTROLLER**.
+Xbox-style and PlayStation-style controllers are supported. Buttons can be changed in **Settings > SYSTEM > CONTROLLER**.
 
 ![Controller settings](docs/screenshots/controller.png)
 
@@ -66,7 +74,7 @@ Xbox-style and PlayStation-style controllers are supported. Buttons can be chang
 | MENU (Options) | Opens or closes Settings (pauses the battle) |
 | D-pad or left stick | Highlights the console buttons, the special weapon and the EMP; A presses the highlighted button |
 
-In menus, the D-pad or left stick moves the highlight, A selects and B goes back.
+In menus, the D-pad or left stick moves the highlight, A selects and B goes back. In Settings, LB and RB switch tabs.
 
 ## Running from source
 

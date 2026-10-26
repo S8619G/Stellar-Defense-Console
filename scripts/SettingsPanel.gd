@@ -1,9 +1,11 @@
 extends Control
-## Gear-icon Settings panel: Effects and RADAR volume with mute switches,
-## difficulty, auto options, Remember Settings, Defaults and QUIT. The version text at the
-## bottom is a link to the project's GitHub page (1.08); the small round "!" beside it
-## opens the app data folder with the session logs (1.08). Built in code so it
-## needs no extra scene file. The console pauses the battle while it is open.
+## Gear-icon Settings panel. 1.1.1: three tabs (Stephen 2026-10-25, mockup
+## mockups/settings_redesign_1.1.0): GAME (difficulty, the six auto options, score
+## multiplier), SYSTEM (volumes, SCREEN EFFECTS, FRAME RATE, CONTROLLER, REMEMBER
+## SETTINGS and DEFAULTS) and ABOUT (the version panel with CHECK NOW, CHECK AT STARTUP and
+## GO BACK, what's new, GITHUB PAGE and DATA FOLDER). QUIT, NEW BATTLE and CLOSE are on
+## every tab. Settings always opens on GAME; LB / RB (or the tab buttons) switch tabs.
+## Built in code so it needs no extra scene file. The console pauses the battle while it is open.
 
 signal changed(settings: Dictionary)
 signal close_requested
@@ -14,6 +16,10 @@ signal open_logs_requested
 signal open_github_requested
 ## 1.0.0: CONTROLLER opens the controller button panel.
 signal controller_requested
+## 1.1.1: ABOUT tab.
+signal check_now_requested
+signal check_at_startup_changed(on: bool)
+signal go_back_requested
 
 const GameSettings = preload("res://scripts/GameSettings.gd")
 const EDGE := Color("#77324f")
@@ -21,11 +27,13 @@ const TEXT := Color("#ede0e8")
 const MUTED := Color("#b9a8b2")
 const ACCENT := Color(1.0, 0.6, 0.78)
 const AMBER := Color("#ffe28b")
-## 1.0.8: one row taller for SCREEN EFFECTS (922 to 988 px).
-## 1.1.0: one row taller again for FRAME RATE (988 to 1054 px).
-const PANEL_SIZE := Vector2(860, 1054)
+const GOOD := Color("#8fe3a8")
+## 1.1.1: tabs make the panel shorter (1.1.0 was 1054 px tall), so it fits a
+## 1280 x 720 window again.
+const PANEL_SIZE := Vector2(860, 800)
 ## QUIT asks once more; the confirmation lapses after this many seconds.
 const QUIT_CONFIRM_SECONDS := 3.0
+const TAB_NAMES := ["GAME", "SYSTEM", "ABOUT"]
 
 var settings: Dictionary = GameSettings.DEFAULTS.duplicate()
 var active_difficulty: int = 1
@@ -58,16 +66,8 @@ var defaults: Dictionary = GameSettings.DEFAULTS.duplicate()
 var quit_button: Button
 ## Hover help text on buttons (the console's Show Hover Tooltips switch; off from 1.06).
 var show_tooltips: bool = false
-## Small dim build text centered at the bottom, for example "RADAR BATTLE CONSOLE 1.06"
-## (set by the console from the project version). Clicking it opens the GitHub page (1.08).
-var version_text: String = "":
-	set(value):
-		version_text = value
-		if version_label:
-			version_label.text = value
-var version_label: LinkButton
-## 1.08: small round "!" just right of the version text; opens the app data folder.
-var log_icon_button: Button
+## Product title and version, for example "STELLAR DEFENSE CONSOLE 1.1.1" (set by the console).
+var version_text: String = ""
 var quit_armed: bool = false
 var quit_armed_serial: int = 0
 var multiplier_label: Label
@@ -76,6 +76,29 @@ var note_label: Label
 var new_battle_button: Button
 var close_button: Button
 var controller_button: Button
+## 1.1.1: tabs.
+var target: Control
+var pages: Array[Control] = []
+var tab_buttons: Array[Button] = []
+var tab_index: int = 0
+var paused_label: Label
+## 1.1.1: ABOUT tab (filled in by set_about()).
+var about_name: Label
+var about_version: Label
+var about_build: Label
+var about_status: Label
+var about_status_note: Label
+var check_button: Button
+var startup_label: Label
+var startup_note: Label
+var startup_button: Button
+var go_back_button: Button
+var go_back_note: Label
+var news_head: Label
+var news_lines: Array[Label] = []
+var github_button: Button
+var data_button: Button
+var about_info: Dictionary = {}
 
 func _ready() -> void:
 	set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
@@ -98,89 +121,129 @@ func _ready() -> void:
 	style.anti_aliasing = true
 	panel.add_theme_stylebox_override("panel", style)
 	add_child(panel)
+	target = panel
 	_label("SETTINGS", Vector2(44, 26), Vector2(400, 40), 30, ACCENT)
-	_label("BATTLE PAUSED", Vector2(PANEL_SIZE.x - 544, 34), Vector2(300, 30), 18, MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
-	# 1.0.0: controller buttons and the controller drawing are on their own panel.
-	controller_button = _button("CONTROLLER", Vector2(PANEL_SIZE.x - 224, 22), Vector2(180, 48), false)
-	controller_button.name = "ControllerButton"
-	_tip(controller_button, "Controller buttons: see and change what each button does")
-	_divider(84)
-	# Rows are 66 pixels apart: name on the left, short note under it, controls on the right.
-	_row_text(100, "EFFECTS VOLUME", "Alerts, weapons and battle sounds", 270)
-	effects_slider = _slider(Vector2(320, 108))
-	effects_value = _label("", Vector2(586, 110), Vector2(70, 30), 20, TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
-	effects_mute = _button("MUTE", Vector2(680, 100), Vector2(136, 56), true)
-	_row_text(166, "RADAR VOLUME", "Background radar sweep", 270)
-	radar_slider = _slider(Vector2(320, 174))
-	radar_value = _label("", Vector2(586, 176), Vector2(70, 30), 20, TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
-	radar_mute = _button("MUTE", Vector2(680, 166), Vector2(136, 56), true)
-	_divider(236)
-	_row_text(252, "DIFFICULTY", "Enemy toughness, attacks and speed", 270)
+	paused_label = _label("BATTLE PAUSED", Vector2(PANEL_SIZE.x - 344, 34), Vector2(300, 30), 18, MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+	var tabs_group := ButtonGroup.new()
+	for i in range(3):
+		var tb := _button(TAB_NAMES[i], Vector2(44 + i * 196, 92), Vector2(184, 52), true)
+		tb.name = "Tab" + TAB_NAMES[i]
+		tb.button_group = tabs_group
+		tb.add_theme_font_size_override("font_size", 20)
+		tb.pressed.connect(show_tab.bind(i))
+		tab_buttons.append(tb)
+	_label("LB / RB", Vector2(PANEL_SIZE.x - 204, 106), Vector2(160, 26), 15, Color(MUTED, 0.7), HORIZONTAL_ALIGNMENT_RIGHT)
+	_divider(160)
+	for i in range(3):
+		var page := Control.new()
+		page.name = "Page" + TAB_NAMES[i]
+		page.position = Vector2.ZERO
+		page.size = PANEL_SIZE
+		page.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(page)
+		pages.append(page)
+	# ---- GAME ----
+	target = pages[0]
+	_row_text(176, "DIFFICULTY", "Enemy toughness, attacks and speed", 270)
 	var group := ButtonGroup.new()
 	for index in range(3):
-		var b := _button(GameSettings.DIFFICULTY_NAMES[index], Vector2(320 + index * 168, 252), Vector2(160, 56), true)
+		var b := _button(GameSettings.DIFFICULTY_NAMES[index], Vector2(320 + index * 168, 176), Vector2(160, 56), true)
 		b.button_group = group
 		b.pressed.connect(_on_difficulty.bind(index))
 		difficulty_buttons.append(b)
-	_row_text(318, "AUTO DEFENSE SHIELD", "Fires by itself as missiles near the flak arc", 560)
-	auto_battery_button = _button("OFF", Vector2(656, 318), Vector2(160, 56), true)
-	_row_text(384, "AUTO FIREWALL", "Raised by itself when a Breacher starts hacking", 560)
-	auto_firewall_button = _button("OFF", Vector2(656, 384), Vector2(160, 56), true)
-	_row_text(450, "AUTO LAUNCH", "Fighters / nukes and carriers", 420)
-	auto_interceptors_button = _button("INTERCEPTORS OFF", Vector2(488, 450), Vector2(160, 56), true)
-	auto_gunships_button = _button("GUNSHIPS OFF", Vector2(656, 450), Vector2(160, 56), true)
+	_row_text(242, "AUTO DEFENSE SHIELD", "Fires by itself as missiles near the flak arc", 560)
+	auto_battery_button = _button("OFF", Vector2(656, 242), Vector2(160, 56), true)
+	_row_text(308, "AUTO FIREWALL", "Raised by itself when a Breacher starts hacking", 560)
+	auto_firewall_button = _button("OFF", Vector2(656, 308), Vector2(160, 56), true)
+	_row_text(374, "AUTO LAUNCH", "Fighters / nukes and carriers", 420)
+	auto_interceptors_button = _button("INTERCEPTORS OFF", Vector2(488, 374), Vector2(160, 56), true)
+	auto_gunships_button = _button("GUNSHIPS OFF", Vector2(656, 374), Vector2(160, 56), true)
 	auto_interceptors_button.add_theme_font_size_override("font_size", 16)
 	auto_gunships_button.add_theme_font_size_override("font_size", 16)
 	_tip(auto_interceptors_button, "Automatically launch Interceptors against enemy fighters")
 	_tip(auto_gunships_button, "Automatically launch Gunships against nukes and Enemy Carriers")
-	_row_text(516, "AUTO RAPID REPAIR", "Uses a repair charge by itself when the hull is at 50% or less", 580)
-	auto_repair_button = _button("OFF", Vector2(656, 516), Vector2(160, 56), true)
-	_row_text(582, "AUTO JUMP", "Jumps by itself when the hull drops below 10% (usual JUMP cost)", 580)
-	auto_jump_button = _button("OFF", Vector2(656, 582), Vector2(160, 56), true)
-	_row_text(648, "SCREEN EFFECTS", "Screen scramble when a nuke hits or the ship is destroyed", 580)
-	screen_effects_button = _button("ON", Vector2(656, 648), Vector2(160, 56), true)
+	_row_text(440, "AUTO RAPID REPAIR", "Uses a repair charge by itself when the hull is at 50% or less", 580)
+	auto_repair_button = _button("OFF", Vector2(656, 440), Vector2(160, 56), true)
+	_row_text(506, "AUTO JUMP", "Jumps by itself when the hull drops below 10% (usual JUMP cost)", 580)
+	auto_jump_button = _button("OFF", Vector2(656, 506), Vector2(160, 56), true)
+	_divider(578)
+	multiplier_label = _label("", Vector2(44, 594), Vector2(500, 34), 24, ACCENT)
+	multiplier_detail = _label("", Vector2(44, 628), Vector2(780, 24), 16, MUTED)
+	note_label = _label("", Vector2(44, 654), Vector2(780, 24), 16, AMBER)
+	# ---- SYSTEM ----
+	target = pages[1]
+	_row_text(176, "EFFECTS VOLUME", "Alerts, weapons and battle sounds", 270)
+	effects_slider = _slider(Vector2(320, 184))
+	effects_value = _label("", Vector2(586, 186), Vector2(70, 30), 20, TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
+	effects_mute = _button("MUTE", Vector2(680, 176), Vector2(136, 56), true)
+	_row_text(242, "RADAR VOLUME", "Background radar sweep", 270)
+	radar_slider = _slider(Vector2(320, 250))
+	radar_value = _label("", Vector2(586, 252), Vector2(70, 30), 20, TEXT, HORIZONTAL_ALIGNMENT_RIGHT)
+	radar_mute = _button("MUTE", Vector2(680, 242), Vector2(136, 56), true)
+	_divider(312)
+	_row_text(328, "SCREEN EFFECTS", "Screen scramble when a nuke hits or the ship is destroyed", 580)
+	screen_effects_button = _button("ON", Vector2(656, 328), Vector2(160, 56), true)
 	screen_effects_button.name = "ScreenEffectsButton"
 	_tip(screen_effects_button, "OFF: no screen scramble or flicker. The red SYSTEMS OFFLINE screen still shows.")
-	_row_text(714, "FRAME RATE", "SMOOTH matches the screen, but uses more power", 580)
-	frame_rate_button = _button("STANDARD", Vector2(656, 714), Vector2(160, 56), true)
+	_row_text(394, "FRAME RATE", "SMOOTH matches the screen, but uses more power", 580)
+	frame_rate_button = _button("STANDARD", Vector2(656, 394), Vector2(160, 56), true)
 	frame_rate_button.name = "FrameRateButton"
 	_tip(frame_rate_button, "STANDARD: at most 60 frames a second, for quieter fans and longer battery life. SMOOTH: matches the screen's refresh rate, for example 144 on a 144 Hz screen.")
-	_row_text(780, "REMEMBER SETTINGS", "OFF: next start uses NORMAL, autos off", 350)
-	reset_button = _button("DEFAULTS", Vector2(488, 780), Vector2(160, 56), false)
+	_divider(464)
+	_row_text(480, "CONTROLLER", "See and change what each controller button does", 580)
+	controller_button = _button("OPEN", Vector2(656, 480), Vector2(160, 56), false)
+	controller_button.name = "ControllerButton"
+	_tip(controller_button, "Controller buttons: see and change what each button does")
+	_row_text(546, "REMEMBER SETTINGS", "OFF: next start uses NORMAL, autos off", 350)
+	reset_button = _button("DEFAULTS", Vector2(488, 546), Vector2(160, 56), false)
 	_tip(reset_button, "Put every setting back to its default (press twice to confirm). High scores are not affected.")
-	remember_button = _button("ON", Vector2(656, 780), Vector2(160, 56), true)
-	_divider(850)
-	multiplier_label = _label("", Vector2(44, 864), Vector2(500, 34), 24, ACCENT)
-	multiplier_detail = _label("", Vector2(44, 898), Vector2(780, 24), 16, MUTED)
-	note_label = _label("", Vector2(44, 926), Vector2(780, 24), 16, AMBER)
-	quit_button = _button("QUIT", Vector2(44, 960), Vector2(200, 56), false)
+	remember_button = _button("ON", Vector2(656, 546), Vector2(160, 56), true)
+	# ---- ABOUT ----
+	target = pages[2]
+	_card(Vector2(44, 176), Vector2(772, 262))
+	about_name = _label("STELLAR DEFENSE CONSOLE", Vector2(68, 190), Vector2(540, 36), 26, ACCENT)
+	about_version = _label("VERSION", Vector2(68, 228), Vector2(400, 32), 22, TEXT)
+	about_build = _label("", Vector2(68, 262), Vector2(560, 24), 16, MUTED)
+	go_back_button = _button("GO BACK", Vector2(632, 190), Vector2(160, 52), false)
+	go_back_button.name = "GoBackButton"
+	_tip(go_back_button, "Swap back to the version kept from before the last update (asks first)")
+	go_back_note = _label("", Vector2(600, 246), Vector2(192, 22), 14, MUTED, HORIZONTAL_ALIGNMENT_RIGHT)
+	var line := ColorRect.new()
+	line.color = Color(EDGE, 0.8)
+	line.position = Vector2(68, 298)
+	line.size = Vector2(724, 1)
+	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target.add_child(line)
+	about_status = _label("", Vector2(68, 316), Vector2(548, 26), 17, GOOD)
+	about_status.clip_text = true
+	about_status_note = _label("Asks the GitHub releases page for a newer version", Vector2(68, 340), Vector2(548, 22), 14, MUTED)
+	check_button = _button("CHECK NOW", Vector2(632, 310), Vector2(160, 52), false)
+	check_button.name = "CheckNowButton"
+	_tip(check_button, "Look for a newer version on the GitHub releases page now")
+	startup_label = _label("CHECK AT STARTUP", Vector2(68, 378), Vector2(400, 26), 17, TEXT)
+	startup_note = _label("Looks quietly each time the game starts", Vector2(68, 402), Vector2(548, 22), 14, MUTED)
+	startup_button = _button("ON", Vector2(632, 374), Vector2(160, 52), true)
+	startup_button.name = "CheckAtStartupButton"
+	_tip(startup_button, "ON: look for a newer version each time the game starts (only offers it; nothing changes without UPDATE NOW)")
+	news_head = _label("WHAT'S NEW", Vector2(44, 452), Vector2(500, 30), 20, TEXT)
+	for i in range(4):
+		news_lines.append(_label("", Vector2(56, 484 + i * 26), Vector2(760, 26), 16, MUTED))
+	_divider(594)
+	_row_text(606, "LINKS", "Project page and the folder with settings, scores and logs", 420)
+	github_button = _button("GITHUB PAGE", Vector2(488, 606), Vector2(160, 56), false)
+	github_button.name = "GitHubPageButton"
+	_tip(github_button, "Open the project's GitHub page in the browser")
+	data_button = _button("DATA FOLDER", Vector2(656, 606), Vector2(160, 56), false)
+	data_button.name = "DataFolderButton"
+	_tip(data_button, "Open the app data folder (settings, high scores and session logs)")
+	# ---- bottom bar (every tab) ----
+	target = panel
+	_divider(690)
+	quit_button = _button("QUIT", Vector2(44, 712), Vector2(200, 56), false)
 	_tip(quit_button, "Close Stellar Defense Console (press twice to confirm)")
-	new_battle_button = _button("NEW BATTLE", Vector2(400, 960), Vector2(220, 56), false)
-	close_button = _button("CLOSE", Vector2(656, 960), Vector2(160, 56), false)
-	# Version text, centered at the bottom; a quiet link to the GitHub page (1.08).
-	var version_row := HBoxContainer.new()
-	version_row.name = "VersionRow"
-	version_row.alignment = BoxContainer.ALIGNMENT_CENTER
-	version_row.position = Vector2(44, 1024)
-	version_row.size = Vector2(PANEL_SIZE.x - 88, 22)
-	version_row.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(version_row)
-	version_label = LinkButton.new()
-	version_label.name = "VersionLabel"
-	version_label.text = version_text
-	version_label.underline = LinkButton.UNDERLINE_MODE_ON_HOVER
-	version_label.focus_mode = Control.FOCUS_NONE
-	version_label.add_theme_font_size_override("font_size", 15)
-	version_label.add_theme_color_override("font_color", Color(MUTED, 0.6))
-	version_label.add_theme_color_override("font_hover_color", Color(TEXT, 0.9))
-	version_label.add_theme_color_override("font_pressed_color", ACCENT)
-	version_label.disabled = true
-	version_label.add_theme_color_override("font_disabled_color", Color(MUTED, 0.6))
-	_tip(version_label, "Private pre-release build. No public release page.")
-	version_row.add_child(version_label)
-	log_icon_button = _log_icon()
-	_tip(log_icon_button, "Open the app data folder (session logs)")
-	version_row.add_child(log_icon_button)
+	new_battle_button = _button("NEW BATTLE", Vector2(400, 712), Vector2(220, 56), false)
+	close_button = _button("CLOSE", Vector2(656, 712), Vector2(160, 56), false)
+	show_tab(0)
 	effects_slider.value_changed.connect(_on_volume.bind("effects_volume"))
 	radar_slider.value_changed.connect(_on_volume.bind("radar_volume"))
 	effects_slider.drag_ended.connect(func(_changed: bool) -> void: effects_preview.emit())
@@ -197,11 +260,17 @@ func _ready() -> void:
 	frame_rate_button.toggled.connect(_on_toggle.bind("smooth_frame_rate"))
 	reset_button.pressed.connect(_on_reset_pressed)
 	quit_button.pressed.connect(_on_quit_pressed)
-	version_label.pressed.connect(func() -> void: open_github_requested.emit())
-	log_icon_button.pressed.connect(func() -> void: open_logs_requested.emit())
 	new_battle_button.pressed.connect(func() -> void: new_battle_requested.emit())
 	close_button.pressed.connect(func() -> void: close_requested.emit())
 	controller_button.pressed.connect(func() -> void: controller_requested.emit())
+	github_button.pressed.connect(func() -> void: open_github_requested.emit())
+	data_button.pressed.connect(func() -> void: open_logs_requested.emit())
+	check_button.pressed.connect(func() -> void: check_now_requested.emit())
+	startup_button.toggled.connect(func(on: bool) -> void:
+		about_info.check_at_startup = on
+		_refresh_about()
+		check_at_startup_changed.emit(on))
+	go_back_button.pressed.connect(func() -> void: go_back_requested.emit())
 	resized.connect(_center_panel)
 	_center_panel()
 
@@ -209,6 +278,7 @@ func _center_panel() -> void:
 	if panel:
 		panel.position = ((size - PANEL_SIZE) * 0.5).round()
 
+## Settings always opens on GAME (Stephen 2026-10-25).
 func open(current: Dictionary, battle_difficulty: int) -> void:
 	settings = GameSettings.clean(current)
 	active_difficulty = battle_difficulty
@@ -216,8 +286,63 @@ func open(current: Dictionary, battle_difficulty: int) -> void:
 	quit_armed = false
 	reset_armed = false
 	_center_panel()
+	show_tab(0)
 	refresh()
 	close_button.grab_focus()
+
+## LB / RB: step to the next or previous tab (wraps around).
+func step_tab(direction: int) -> void:
+	show_tab(posmod(tab_index + direction, TAB_NAMES.size()))
+
+func show_tab(i: int) -> void:
+	tab_index = clampi(i, 0, pages.size() - 1)
+	for k in range(pages.size()):
+		pages[k].visible = k == tab_index
+		tab_buttons[k].set_pressed_no_signal(k == tab_index)
+
+## "BATTLE PAUSED" normally; the console sets other words between battles.
+func set_paused_text(text: String) -> void:
+	paused_label.text = text
+
+## ABOUT tab contents. Keys: version, build, date, status, status_good, checking,
+## check_at_startup, backup_version, updates (false: Steam or no update support),
+## updates_note, news (Array of lines), github (bool).
+func set_about(info: Dictionary) -> void:
+	about_info = info.duplicate()
+	_refresh_about()
+
+func _refresh_about() -> void:
+	if about_version == null:
+		return
+	var info := about_info
+	about_version.text = "VERSION %s" % info.get("version", "?")
+	var bits := [str(info.get("build", ""))]
+	if str(info.get("date", "")) != "":
+		bits.append("RELEASED %s" % info.date)
+	about_build.text = "   |   ".join(PackedStringArray(bits))
+	var updates := bool(info.get("updates", true))
+	about_status.text = str(info.get("status", ""))
+	about_status.add_theme_color_override("font_color", GOOD if bool(info.get("status_good", false)) else MUTED)
+	about_status_note.text = str(info.get("updates_note", "Asks the GitHub releases page for a newer version"))
+	check_button.visible = updates
+	check_button.disabled = bool(info.get("checking", false))
+	check_button.text = "CHECKING" if bool(info.get("checking", false)) else "CHECK NOW"
+	for n in [startup_label, startup_note, startup_button]:
+		n.visible = updates
+	var on := bool(info.get("check_at_startup", true))
+	startup_button.set_pressed_no_signal(on)
+	startup_button.text = "ON" if on else "OFF"
+	var back := str(info.get("backup_version", ""))
+	go_back_button.visible = updates and back != ""
+	go_back_note.visible = go_back_button.visible
+	go_back_note.text = "to version %s" % back
+	var lines: Array = info.get("news", [])
+	news_head.text = "WHAT'S NEW IN %s" % info.get("version", "")
+	for i in news_lines.size():
+		news_lines[i].visible = i < lines.size()
+		if i < lines.size():
+			news_lines[i].text = "-  " + str(lines[i])
+	github_button.disabled = not bool(info.get("github", true))
 
 func refresh() -> void:
 	effects_slider.set_value_no_signal(settings.effects_volume)
@@ -327,7 +452,7 @@ func _label(text: String, at: Vector2, box: Vector2, font_size: int, color: Colo
 	label.add_theme_font_size_override("font_size", font_size)
 	label.add_theme_color_override("font_color", color)
 	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(label)
+	target.add_child(label)
 	return label
 
 func _row_text(y: float, title: String, note: String, note_width: float) -> void:
@@ -345,35 +470,7 @@ func _button(text: String, at: Vector2, box: Vector2, toggle: bool) -> Button:
 	button.size = box
 	button.toggle_mode = toggle
 	button.focus_mode = Control.FOCUS_ALL
-	panel.add_child(button)
-	return button
-
-## 1.08: the small circular "!" icon (same quiet colors as the version text).
-func _log_icon() -> Button:
-	var button := Button.new()
-	button.name = "LogFolderIcon"
-	button.text = "!"
-	button.focus_mode = Control.FOCUS_NONE
-	button.custom_minimum_size = Vector2(22, 22)
-	button.size_flags_vertical = Control.SIZE_SHRINK_CENTER
-	button.add_theme_font_size_override("font_size", 14)
-	button.add_theme_color_override("font_color", Color(MUTED, 0.6))
-	button.add_theme_color_override("font_hover_color", Color(TEXT, 0.9))
-	button.add_theme_color_override("font_pressed_color", ACCENT)
-	for state in ["normal", "hover", "pressed", "focus"]:
-		var ring := StyleBoxFlat.new()
-		ring.bg_color = Color(0, 0, 0, 0) if state != "pressed" else Color(ACCENT, 0.15)
-		ring.border_color = Color(MUTED, 0.6) if state == "normal" else (Color(TEXT, 0.9) if state == "hover" else ACCENT)
-		if state == "focus":
-			ring.draw_center = false
-			ring.border_color = Color(0, 0, 0, 0)
-		ring.set_border_width_all(1)
-		ring.set_corner_radius_all(11)
-		ring.content_margin_left = 0
-		ring.content_margin_right = 0
-		ring.content_margin_top = 0
-		ring.content_margin_bottom = 0
-		button.add_theme_stylebox_override(state, ring)
+	target.add_child(button)
 	return button
 
 func _slider(at: Vector2) -> HSlider:
@@ -399,7 +496,7 @@ func _slider(at: Vector2) -> HSlider:
 	var knob := _knob(Color(1.0, 0.72, 0.86))
 	slider.add_theme_icon_override("grabber", knob)
 	slider.add_theme_icon_override("grabber_highlight", _knob(Color(1.0, 0.9, 0.95)))
-	panel.add_child(slider)
+	target.add_child(slider)
 	return slider
 
 func _knob(color: Color) -> Texture2D:
@@ -415,4 +512,19 @@ func _divider(y: float) -> void:
 	line.position = Vector2(44, y)
 	line.size = Vector2(PANEL_SIZE.x - 88, 1)
 	line.mouse_filter = Control.MOUSE_FILTER_IGNORE
-	panel.add_child(line)
+	target.add_child(line)
+
+func _card(at: Vector2, box: Vector2) -> Panel:
+	var card := Panel.new()
+	card.position = at
+	card.size = box
+	var st := StyleBoxFlat.new()
+	st.bg_color = Color(0.09, 0.035, 0.07, 0.95)
+	st.border_color = Color(0.55, 0.23, 0.38)
+	st.set_border_width_all(1)
+	st.set_corner_radius_all(10)
+	card.add_theme_stylebox_override("panel", st)
+	card.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	target.add_child(card)
+	return card
+

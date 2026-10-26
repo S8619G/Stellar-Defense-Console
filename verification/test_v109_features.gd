@@ -105,13 +105,13 @@ func _run() -> void:
 	c.stealth_event.connect(func(m: String) -> void: events.append(m))
 
 	# --- Full build 1.09 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 1.09")
-	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text reads STELLAR DEFENSE CONSOLE 1.1.0")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.1", "Project version is 1.09")
+	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.1", "Version text reads STELLAR DEFENSE CONSOLE 1.1.1")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.1.0"
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.1.1"
 		and presets.get_value("preset.1.options", "binary_format/architecture", "") == "universal", "Export presets name 1.09 files; Mac stays Universal")
 
 	# --- ANGLE on Qualcomm only ---
@@ -238,7 +238,7 @@ func _run() -> void:
 			check(sv.revealed and c.contact_tag(sv) == "STEALTH", "After firing it is visible to the enemy (no more blinking)")
 		if second_shot < 0.0 and c.stealth_nukes_fired == 2:
 			second_shot = t
-	check(first_shot > 0.0 and second_shot - first_shot >= 3.95, "Two nukes, 4 seconds apart (%.2f s)" % (second_shot - first_shot))
+	check(first_shot > 0.0 and second_shot - first_shot >= c.stealth_shot_seconds - 0.05, "Two nukes, %.0f seconds apart (%.2f s)" % [c.stealth_shot_seconds, second_shot - first_shot])
 	check(c.stealth_nuke_hits == 2 and c.find_contact(target_id).is_empty() and c.carriers_destroyed == 1, "Two nukes destroy a Enemy Carrier (3 hits each)")
 	check(c.find_contact(sv.id).is_empty() and c.stealth_recovered == 1 and absf(c.stealth_cooldown_remaining - 60.0) < 0.2, "It returns and rearms for 60 seconds")
 	check(not c.status_message.contains("REBUILD") and not c.status_message.contains("REARM"), "No rearm message or countdown on screen")
