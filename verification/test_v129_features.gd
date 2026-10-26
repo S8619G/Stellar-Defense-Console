@@ -115,7 +115,7 @@ func _run() -> void:
 	check(not console.version_text().to_lower().contains("test"), "No Test label in the version text")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Windows_x64.exe")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_Windows_x64.exe")
 		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip")
 		and presets.get_value("preset.1.options", "application/version", "") == "1.1.1"
 		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.1", "Export presets name 0.1.2 files")

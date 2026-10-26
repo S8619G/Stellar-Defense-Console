@@ -37,7 +37,7 @@ Ready-to-play copies are on the [Releases](https://github.com/S8619G/Stellar-Def
 
 - **Windows:** download the `.exe.zip` for your PC, extract the `.exe` from it and double-click it. The game is not code-signed, so Windows may show "Windows protected your PC". Click **More info**, then **Run anyway**.
 - **Mac:** open the `.zip` and drag **Stellar Defense Console** to Applications. The app is not notarized. The first time, macOS may say it cannot check the app. Close that message, open **System Settings > Privacy & Security**, scroll down and click **Open Anyway** next to Stellar Defense Console.
-- **Linux:** extract the `.tar.gz` and run `Stellar_Defense_Console_<version>_Linux.x86_64`.
+- **Linux:** extract the `.tar.gz` and run `Stellar_Defense_Console_Linux.x86_64`.
 
 No installation or extra software is needed.
 
@@ -45,7 +45,7 @@ No installation or extra software is needed.
 
 At startup, the game checks this page for a newer version. If one is available, a message offers LATER, SKIP THIS VERSION and UPDATE NOW. UPDATE NOW downloads the new version, checks it against `SHA256SUMS.txt`, swaps it in place under the same file name and reopens the game; settings and high scores are kept. If anything goes wrong, the current version stays. The previous version is kept, and **Settings > ABOUT > GO BACK** returns to it. The startup check can be switched off with **CHECK AT STARTUP** on the ABOUT tab, and **CHECK NOW** checks at any time. If the game sits in a protected folder, the computer asks for permission first. On a Mac, if the app is still in the Downloads folder or another temporary place, the game asks to move it to Applications first.
 
-The in-game updater looks for the exact file names listed above, so release files keep these names.
+The in-game updater looks for the exact file names listed above, so release files keep these names. The game file inside each download has no version in its name (for example `Stellar_Defense_Console_Windows_x64.exe`), so the name stays correct after an update; the version shows on the ABOUT tab.
 
 On Windows laptops with two graphics chips, Windows chooses which one the game uses, usually the low-power one. To use the powerful card, open **Windows Settings > System > Display > Graphics**, or the Nvidia or AMD control panel, and choose it for the game.
 

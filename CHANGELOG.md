@@ -24,6 +24,7 @@
 
 - Secure connections: the game first uses the computer's own list of trusted certificate authorities. If that list cannot verify GitHub's certificate (seen on Windows, which keeps only part of its list on the computer), the game uses its own built-in list (the one Firefox uses). If the connection still fails, the message says a secure connection could not be made, instead of asking to check the internet.
 - A download that meets a temporary GitHub server error is tried again.
+- The game file inside each download has no version in its name (`Stellar_Defense_Console_Windows_x64.exe`, `Stellar_Defense_Console_Windows_arm64.exe`, `Stellar_Defense_Console_Linux.x86_64`; the Mac app was already `Stellar Defense Console.app`). An update keeps the file's name, so the name now stays correct. The download names on GitHub still carry the version.
 
 ### Stealth Interceptor
 

@@ -109,13 +109,18 @@ func _versions_and_names() -> void:
 		paths.append(path)
 		if str(presets.get_value(section, "platform", "")) == "Linux":
 			linux = path
-	check(linux.get_file() == "Stellar_Defense_Console_1.1.1_Linux.x86_64", "Linux file name keeps the full version (Stellar_Defense_Console_1.1.1_Linux.x86_64)")
-	check(linux.get_extension() == "x86_64" and linux.get_file().get_basename() == "Stellar_Defense_Console_1.1.1_Linux", "Linux extension is .x86_64, so the export dialog keeps the full version")
+	check(linux.get_file() == "Stellar_Defense_Console_Linux.x86_64", "Linux file name has no version, so it stays right after an update (Stellar_Defense_Console_Linux.x86_64)")
+	check(linux.get_extension() == "x86_64" and linux.get_file().get_basename() == "Stellar_Defense_Console_Linux", "Linux extension is .x86_64, so the export dialog keeps the full name")
 	var all_ok := paths.size() == 4
 	for path in paths:
-		if not str(path).get_file().begins_with("Stellar_Defense_Console_1.1.1_"):
-			all_ok = false
-	check(all_ok, "All four export file names start Stellar_Defense_Console_1.1.1_")
+		var file := str(path).get_file()
+		# 1.1.1: the game files have no version in their names (an update keeps the name);
+		# only the Mac download, a packed file, carries the version.
+		if file.ends_with("_Mac.zip"):
+			all_ok = all_ok and file == "Stellar_Defense_Console_1.1.1_Mac.zip"
+		else:
+			all_ok = all_ok and file.begins_with("Stellar_Defense_Console_") and not file.contains("1.1")
+	check(all_ok, "Game file names have no version; the Mac download is Stellar_Defense_Console_1.1.1_Mac.zip")
 	var versions_ok := true
 	for section in presets.get_sections():
 		for key in presets.get_section_keys(section):

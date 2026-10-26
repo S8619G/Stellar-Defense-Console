@@ -154,7 +154,7 @@ func _run() -> void:
 	check(ProjectSettings.get_setting("application/config/version") == "1.1.1", "Version 1.08")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Windows_x64.exe") and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip"), "Export names use 1.05")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_Windows_x64.exe") and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip"), "Export names use 1.05")
 	check(not console.development_build, "Console starts with Development Build off")
 	var key := InputEventKey.new()
 	key.keycode = KEY_F1

@@ -92,9 +92,9 @@ func _run() -> void:
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
 	check(presets.get_value("preset.0", "name") == "Windows Desktop" and presets.get_value("preset.0.options", "binary_format/architecture") == "x86_64"
-		and str(presets.get_value("preset.0", "export_path")).ends_with("Stellar_Defense_Console_1.1.1_Windows_x64.exe"), "Windows x64 preset")
+		and str(presets.get_value("preset.0", "export_path")).ends_with("Stellar_Defense_Console_Windows_x64.exe"), "Windows x64 preset")
 	check(presets.get_value("preset.2", "name") == "Windows Desktop ARM64" and presets.get_value("preset.2.options", "binary_format/architecture") == "arm64"
-		and str(presets.get_value("preset.2", "export_path")).ends_with("Stellar_Defense_Console_1.1.1_Windows_arm64.exe"), "Windows ARM64 preset")
+		and str(presets.get_value("preset.2", "export_path")).ends_with("Stellar_Defense_Console_Windows_arm64.exe"), "Windows ARM64 preset")
 	check(presets.get_value("preset.1", "platform") == "macOS" and presets.get_value("preset.1.options", "binary_format/architecture") == "universal"
 		and str(presets.get_value("preset.1", "export_path")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip")
 		and presets.get_value("preset.1.options", "application/short_version") == "1.1.1", "Mac universal preset (Intel and M-series)")

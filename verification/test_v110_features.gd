@@ -113,7 +113,7 @@ func _run() -> void:
 	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.1", "Version text reads STELLAR DEFENSE CONSOLE 1.1.1")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Windows_x64.exe")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_Windows_x64.exe")
 		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.1_Mac.zip")
 		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.1"
 		and presets.get_value("preset.1.options", "application/version", "") == "1.1.1", "Export presets name 1.1.1 files and the Mac version is 1.1.1")

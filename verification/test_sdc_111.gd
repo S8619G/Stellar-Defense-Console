@@ -50,6 +50,7 @@ func _run() -> void:
 	await startup_checks()
 	stealth_checks()
 	tls_checks()
+	naming_checks()
 	if server_pid > 0:
 		OS.kill(server_pid)
 	print("SDC111_RESULT checks=%d failures=%d" % [checks, failures])
@@ -611,3 +612,18 @@ func tls_checks() -> void:
 	var cfg := FileAccess.get_file_as_string("res://export_presets.cfg")
 	check(cfg.count('include_filter="*.crt"') == 4, "TLS: all four builds include the list")
 	u.queue_free()
+
+# ------------------------------------------------------------------
+# 1.1.1: the game file has no version in its name, so the name is still right after an
+# update (the updater keeps the running file's name). The downloads keep the version.
+func naming_checks() -> void:
+	var presets := ConfigFile.new()
+	presets.load("res://export_presets.cfg")
+	var names := {}
+	for i in range(4):
+		names[str(presets.get_value("preset.%d" % i, "name", ""))] = str(presets.get_value("preset.%d" % i, "export_path", "")).get_file()
+	check(names.get("Windows Desktop", "") == "Stellar_Defense_Console_Windows_x64.exe", "Windows x64 game file: Stellar_Defense_Console_Windows_x64.exe (no version)")
+	check(names.get("Windows Desktop ARM64", "") == "Stellar_Defense_Console_Windows_arm64.exe", "Windows ARM64 game file: Stellar_Defense_Console_Windows_arm64.exe (no version)")
+	check(names.get("Linux x86_64", "") == "Stellar_Defense_Console_Linux.x86_64", "Linux game file: Stellar_Defense_Console_Linux.x86_64 (no version)")
+	check(names.get("macOS", "") == "Stellar_Defense_Console_1.1.1_Mac.zip", "Mac download keeps the version; the app inside is Stellar Defense Console.app")
+	check(UpdateCore.asset_name("1.1.2", "Windows_arm64") == "Stellar_Defense_Console_1.1.2_Windows_arm64.exe.zip", "Download names on GitHub still carry the version")
