@@ -11,7 +11,9 @@ A tactical space defense game for Windows (x64 and arm64), Mac (Apple M-series a
 - Protect the convoy rounds between sets, where Interceptors defend a support fleet from Attack Drones and a hull-draining Breacher, helped by a Repair Tender.
 - Damage effects: a nuke hit scrambles the console screen, and losing the ship brings up a red SYSTEMS OFFLINE screen before the score screen. The scramble and the low hull flicker can be switched off in Settings (SCREEN EFFECTS).
 - A console frame with an alert box, NAV DATA and a hull gauge with percentage. Below 6% hull, the HULL bar flashes red and the screen flickers lightly.
-- Interceptor squadrons, Gunships, a Stealth Interceptor special weapon, Rapid Repair and Jump.
+- Interceptor squadrons, Gunships, a Stealth Interceptor special weapon with nukes or a PULSE BOMB that freezes enemies, Rapid Repair and Jump.
+- A breach alert: while a Breacher is hacking the ship, the ship fill flashes red and black stripes and NAV DATA shows INTRUSION DETECTION.
+- A FRAME RATE setting (STANDARD at 60 frames a second, or SMOOTH to match the screen).
 - Easy, Normal and Hard difficulty, and optional automatic modes.
 - High scores with per-battle stats; settings saved on the computer.
 - Game controller support with remappable buttons.
@@ -22,8 +24,8 @@ A tactical space defense game for Windows (x64 and arm64), Mac (Apple M-series a
 
 | Computer | Download |
 |---|---|
-| Windows PC with an Intel or AMD processor (x64) | `Stellar_Defense_Console_<version>_Windows_x64.exe` |
-| Windows PC with an ARM processor (arm64), such as a Surface Pro or Snapdragon laptop | `Stellar_Defense_Console_<version>_Windows_arm64.exe` |
+| Windows PC with an Intel or AMD processor (x64) | `Stellar_Defense_Console_<version>_Windows_x64.exe.zip` |
+| Windows PC with an ARM processor (arm64), such as a Surface Pro or Snapdragon laptop | `Stellar_Defense_Console_<version>_Windows_arm64.exe.zip` |
 | Mac with an Apple M-series chip (M1 or later) or an Intel processor | `Stellar_Defense_Console_<version>_Mac.zip` (one Universal app for both) |
 | Linux PC with an Intel or AMD processor (x86_64) | `Stellar_Defense_Console_<version>_Linux.tar.gz` |
 
@@ -31,11 +33,13 @@ A tactical space defense game for Windows (x64 and arm64), Mac (Apple M-series a
 
 Ready-to-play copies are on the [Releases](https://github.com/S8619G/Stellar-Defense-Console/releases) page.
 
-- **Windows:** download the `.exe` for your PC and double-click it. The game is not code-signed, so Windows may show "Windows protected your PC". Click **More info**, then **Run anyway**.
+- **Windows:** download the `.exe.zip` for your PC, extract the `.exe` from it and double-click it. The game is not code-signed, so Windows may show "Windows protected your PC". Click **More info**, then **Run anyway**.
 - **Mac:** open the `.zip` and drag **Stellar Defense Console** to Applications. The app is not notarized. The first time, macOS may say it cannot check the app. Close that message, open **System Settings > Privacy & Security**, scroll down and click **Open Anyway** next to Stellar Defense Console.
 - **Linux:** extract the `.tar.gz` and run `Stellar_Defense_Console_<version>_Linux.x86_64`.
 
 No installation or extra software is needed.
+
+On Windows laptops with two graphics chips, Windows chooses which one the game uses, usually the low-power one. To use the powerful card, open **Windows Settings > System > Display > Graphics**, or the Nvidia or AMD control panel, and choose it for the game.
 
 **Photosensitivity warning:** the game contains flashing lights, full-screen flashes, screen scramble and flicker effects, and pulsing images. The screen scramble and the low hull flicker can be switched off in **Settings > SCREEN EFFECTS**. See [NOTICE.md](NOTICE.md) before playing.
 
@@ -57,7 +61,7 @@ Xbox-style and PlayStation-style controllers are supported. Buttons can be chang
 | Y (Triangle) | Firewall on/off |
 | RB (R1) | Rapid Repair |
 | LB (L1) | Jump, held for one second |
-| LT (L2) | Launch Stealth Interceptor |
+| LT (L2) | Launch Stealth Interceptor (with a PULSE BOMB charge: short press for nukes, hold 1 second for the PULSE BOMB) |
 | RT (R2) | Use EMP |
 | MENU (Options) | Opens or closes Settings (pauses the battle) |
 | D-pad or left stick | Highlights the console buttons, the special weapon and the EMP; A presses the highlighted button |

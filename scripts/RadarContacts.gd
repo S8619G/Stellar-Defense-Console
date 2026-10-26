@@ -156,12 +156,24 @@ const SMALL_HOSTILE_KINDS := ["drone"]
 @export_range(0, 10000) var carrier_points: int = 1000
 @export_range(0, 10000) var breacher_points: int = 300
 @export_range(0, 10000) var jump_score_cost: int = 3000
+## 1.1.0: a JUMP during a wave costs Jump Score Cost or this percent of the current score,
+## whichever is bigger (0 = always Jump Score Cost, as in 1.0.9).
+@export_range(0.0, 50.0) var jump_score_percent: float = 10.0
+## Cost of the latest JUMP (for its status messages).
+var last_jump_cost: int = 3000
 @export_range(1000, 100000) var bonus_repair_points: int = 10000
 ## Later bonus charges are spaced out: 10,000, then 25,000, 50,000, then every 50,000 more.
 @export_range(1000, 500000) var second_bonus_points: int = 25000
 @export_range(1000, 500000) var third_bonus_points: int = 50000
 @export_range(1000, 500000) var later_bonus_step: int = 50000
 @export_range(1.0, 100.0) var rapid_repair_percent: float = 25.0
+## 1.1.0: most Rapid Repair charges held, on Easy and on Normal and Hard (0 = no limit,
+## as in 1.0.9). A charge earned at the limit is lost. Once the limit is reached, no
+## charges are earned until the player is down to Repair Resume Charges; earning then
+## starts again at the next point total still ahead.
+@export_range(0, 20) var rapid_repair_limit_easy: int = 2
+@export_range(0, 20) var rapid_repair_limit: int = 4
+@export_range(0, 20) var repair_resume_charges: int = 1
 @export_range(1.0, 20.0) var rapid_repair_seconds: float = 5.0
 ## 0.1.2 fix: Rapid Repair is live only while the hull readout shows below 100%, so a
 ## charge is never spent on a hull that reads full (the readout rounds up). Off = 1.2.9.
@@ -903,6 +915,11 @@ var evade_outside := 0
 @export var squadrons_split_to_engage: bool = true
 ## Interceptors allowed on one tough target (Breacher, Siege Ship) before the rest look elsewhere.
 @export_range(1, 6) var max_interceptors_per_tough_target: int = 2
+## 1.1.0 (Stephen 2026-10-24): while no Gunship is out (a returning Gunship does not
+## count), a Breacher hacking or draining the ship is a priority target for Interceptors,
+## ahead of Attack Drones and missiles (and of frozen drones after a PULSE BOMB). Up to
+## Max Interceptors Per Tough Target go after each one. Off = the 1.0.9 rule.
+@export var interceptors_hacking_breachers_first: bool = true
 ## How strongly a Interceptor avoids a Attack Drone or missile a squadron mate already chases (1 = no spreading).
 @export_range(1.0, 10.0) var squadron_spread_penalty: float = 3.0
 ## Gap between Interceptors in the shared patrol formation (keep under the join distance).
@@ -1022,6 +1039,64 @@ var evade_outside := 0
 ## in four is lost in typical Normal and Hard battles.
 @export_range(0.0, 1.0) var stealth_hit_chance: float = 0.045
 
+@export_group("Pulse Bomb")
+## 1.1.0: the Stealth Interceptor can carry one PULSE BOMB instead of its 2 nukes, while a
+## charge earned by score is held (off = the 1.0.9 Stealth Interceptor).
+@export var pulse_bomb_enabled: bool = true
+## Stephen 2026-10-25: one PULSE BOMB charge per score level (earned points), Normal
+## every 40,000 and Hard every 50,000 (never on Easy). At most 1 held; a charge earned
+## while one is held is lost. While a charge is held, the next Stealth launch carries it.
+@export_range(1000, 500000, 1000) var pulse_bomb_normal_points: int = 40000
+@export_range(1000, 500000, 1000) var pulse_bomb_hard_points: int = 50000
+@export_range(1, 3) var pulse_bomb_max_charges: int = 1
+## Stephen 2026-10-25: frozen enemies also lose this share of their CURRENT strength
+## each second (Attack Drones and Breachers too). It never destroys a ship by itself.
+@export_range(0.0, 0.5) var pulse_drain_per_second: float = 0.05
+## Stephen 2026-10-25: frozen Attack Drones instead lose this share of their FULL
+## strength each second, and the drain can destroy them (normal points). At 10% a
+## drone left alone is destroyed at the end of the 10-second freeze; one already hit
+## goes sooner. Breachers keep the drain above and are never destroyed by it.
+@export_range(0.0, 0.5) var pulse_drone_drain_per_second: float = 0.10
+var pulse_drain_kills: int = 0
+## Frozen enemies take this many times the normal damage.
+@export_range(1.0, 4.0) var pulse_frozen_damage_factor: float = 2.0
+## Stephen 2026-10-25: Interceptors fly 1.5 times faster while
+## chasing a frozen target, and each one goes after a different frozen drone (they
+## double up only when there are more Interceptors than frozen drones). Frozen
+## drones stay ahead of incoming missiles (missiles first = off).
+@export_range(1.0, 3.0) var pulse_chase_speed_factor: float = 1.5
+@export var pulse_chase_spread: bool = true
+@export var pulse_chase_missiles_first: bool = false
+@export_range(1.0, 30.0) var pulse_freeze_seconds: float = 10.0
+## Area size, in scope units (Stephen 2026-10-25: the large area, 0.60).
+@export_range(0.1, 1.0) var pulse_radius: float = 0.60
+## Aim: 0 = nearest Enemy Carrier, 1 = the spot that catches the most large ships
+## (Stephen 2026-10-25: the most large ships).
+@export_range(0, 1) var pulse_aim: int = 1
+## Seconds the bomb sits armed (blinking) before it goes off.
+@export_range(0.0, 4.0) var pulse_fuse_seconds: float = 1.0
+@export var pulse_color := Color(0.62, 0.9, 1.0)
+## Stephen 2026-10-25: a nuclear missile inside the area when the bomb goes off is not
+## frozen but flies at this share of its normal speed until it hits or is destroyed
+## (0.6 = 40% slower; 1 = not slowed). It shimmers ice-blue like frozen enemies.
+@export_range(0.1, 1.0) var pulse_nuke_speed_factor: float = 0.6
+## Stephen 2026-10-25: Interceptors go after a hacking or draining Breacher before
+## frozen Attack Drones (with the Hacking Breachers First rule on).
+
+var pulse_charges: int = 0
+var pulse_drained: float = 0.0
+var pulse_awards_earned: int = 0
+var pulse_charges_lost: int = 0
+var pulse_bombs: Array[Dictionary] = []
+var pulse_fields: Array[Dictionary] = []
+var pulse_detonations: int = 0
+var pulse_frozen_large: int = 0
+var pulse_frozen_fighters: int = 0
+var pulse_breachers_sent_home: int = 0
+## Nuclear missiles slowed by a PULSE BOMB, and seconds left of the latest freeze.
+var pulse_nukes_slowed: int = 0
+var pulse_freeze_left: float = 0.0
+
 var contacts: Array[Dictionary] = []
 var pending: Array[Dictionary] = []
 var next_id: int = 1
@@ -1043,7 +1118,7 @@ var missile_hits: int = 0
 var prox_kills: int = 0
 var missile_intercepts: int = 0
 var jumps_used: int = 0
-var status_message: String = "DEFEND THE LOWER SCOPE | LAUNCH INTERCEPTORS WHEN ATTACK DRONES APPEAR"
+var status_message: String = "DEFEND THE AEGIS | LAUNCH INTERCEPTORS WHEN ATTACK DRONES APPEAR"
 var status_remaining: float = 0.0
 var repair_delay_remaining: float = 0.0
 var repair_elapsed: float = 0.0
@@ -1134,6 +1209,10 @@ var rapid_repair_used: bool = false
 var rapid_repair_remaining: float = 0.0
 var rapid_repair_rate: float = 0.0
 var repair_charges: int = 1
+## 1.1.0: true while Rapid Repair earning is paused at the limit.
+var repair_earning_paused: bool = false
+## 1.1.0: charges earned at the limit and lost (for the session log and tests).
+var repair_charges_lost: int = 0
 var earned_points: int = 0
 ## 1.05 bonus state. Battle time when Double Missile unlocked (-1 = not yet).
 var double_missile_unlocked_at: float = -1.0
@@ -1440,12 +1519,23 @@ func _process(delta: float) -> void:
 	safe_remaining = maxf(0.0, safe_remaining - delta)
 	status_remaining = maxf(0.0, status_remaining - delta)
 	if status_remaining <= 0.0:
-		status_message = "DEFEND THE LOWER SCOPE | INTERCEPTORS ENGAGE ATTACK DRONES AND MISSILES"
+		status_message = "DEFEND THE AEGIS | INTERCEPTORS ENGAGE ATTACK DRONES AND MISSILES"
 	for index in range(contacts.size() - 1, -1, -1):
 		var contact: Dictionary = contacts[index]
 		contact.age += delta
 		if Icons.is_interceptor(contact.kind):
 			continue
+		if float(contact.get("frozen", 0.0)) > 0.0:
+			# 1.1.0 PULSE BOMB: frozen enemies do not move, fire or launch.
+			contact.frozen = maxf(0.0, float(contact.frozen) - delta)
+			if _pulse_drain_step(contact, delta):
+				# The drain destroyed this Attack Drone (points already given).
+				contacts.remove_at(index)
+				continue
+			if contact.has("velocity"):
+				contact.velocity = Vector3.ZERO
+			if contact.kind in ["carrier", "siege_ship", "drone"]:
+				continue
 		if contact.kind == "carrier":
 			_update_carrier(contact, delta)
 			continue
@@ -1470,6 +1560,7 @@ func _process(delta: float) -> void:
 	_update_interceptors(delta)
 	_update_gunships(delta)
 	_update_stealth(delta)
+	_update_pulse(delta)
 	_resolve_missiles()
 	if not is_defeated():
 		_update_own_weapons(delta)
@@ -1584,6 +1675,8 @@ func spawn_from_carrier(kind: String, origin_id: String) -> String:
 		return ""
 	var base := find_contact(origin_id)
 	if base.is_empty() or base.kind not in ["carrier", "siege_ship"]:
+		return ""
+	if float(base.get("frozen", 0.0)) > 0.0:
 		return ""
 	# A Siege Ship launches missiles only, never fighters.
 	if base.kind == "siege_ship" and kind != "missile":
@@ -1742,6 +1835,17 @@ func is_returning(contact: Dictionary) -> bool:
 func display_color(contact: Dictionary) -> Color:
 	if contact.get("faction", "") == "civilian":
 		return civilian_display_color(contact)
+	if float(contact.get("frozen", 0.0)) > 0.0 or contact.get("pulse_slowed", false):
+		# 1.1.0 PULSE BOMB: frozen enemies and slowed nuclear missiles shimmer ice-blue.
+		var glint := 0.5 + 0.5 * sin(TAU * 5.0 * battle_time + float(String(contact.id).hash() % 7))
+		var ice := pulse_color.lerp(Color.WHITE, glint * 0.45)
+		ice.a = 0.7 + 0.3 * glint
+		var hurt := clampf(float(contact.get("drain_flash", 0.0)) / 0.3, 0.0, 1.0)
+		if hurt > 0.0:
+			# Red flicker each time the drain takes health.
+			ice = ice.lerp(Color(1.0, 0.22, 0.25), hurt * 0.85)
+			ice.a = 1.0
+		return ice
 	var color := unknown_color
 	if contact.faction == "friendly":
 		color = friendly_color
@@ -1750,6 +1854,10 @@ func display_color(contact: Dictionary) -> Color:
 	if contact.get("phase", "") == "protect" and float(contact.get("hold", 0.0)) > 0.0 and protect_jump_in_hold > 0.0:
 		# 1.2.5: a Attack Drone jumping in fades up from dim while it holds.
 		color.a = lerpf(1.0, 0.3, clampf(float(contact.hold) / protect_jump_in_hold, 0.0, 1.0))
+	elif contact.kind == "stealth_interceptor" and contact.get("phase", "") == "return":
+		# 1.1.0 (Stephen 2026-10-25): heading home after either weapon it keeps its
+		# normal green (only the blink), so it never looks like a frozen enemy.
+		color.a = 0.55 + 0.45 * (0.5 + 0.5 * cos(TAU * returning_flash_hz * battle_time))
 	elif is_returning(contact):
 		color = color.lerp(Color.WHITE, clampf(returning_lighten, 0.0, 0.8))
 		color.a = 0.55 + 0.45 * (0.5 + 0.5 * cos(TAU * returning_flash_hz * battle_time))
@@ -1893,13 +2001,19 @@ func _update_jump_offline() -> void:
 		_set_status("JUMP BACK ONLINE | RECHARGING", 3.0)
 	jump_offline_changed.emit(offline)
 
+## 1.1.0: what a JUMP during a wave costs right now: Jump Score Cost or Jump Score Percent
+## of the current score, whichever is bigger.
+func jump_cost_now() -> int:
+	return maxi(jump_score_cost, roundi(float(score) * maxf(0.0, jump_score_percent) / 100.0))
+
 func request_jump() -> bool:
 	if not can_jump():
 		return false
 	# 1.2.0: jumping during the rest is free and brings the next wave on early.
 	var rest_jump := wave_system_active() and wave_phase == "rest"
+	last_jump_cost = jump_cost_now()
 	if not rest_jump:
-		score = maxi(0, score - jump_score_cost)
+		score = maxi(0, score - last_jump_cost)
 	var left_siege := count_kind("siege_ship") > 0
 	# 1.09: a Stealth Interceptor out on its run jumps with the fleet and starts rearming.
 	if count_kind("stealth_interceptor") > 0:
@@ -1938,7 +2052,7 @@ func request_jump() -> bool:
 	spawn_countdown = 0.8
 	wave_countdown = 0.0
 	jumps_used += 1
-	_set_status("JUMP COMPLETE | -%d POINTS | DAMAGE RETAINED" % jump_score_cost, safe_remaining)
+	_set_status("JUMP COMPLETE | -%d POINTS | DAMAGE RETAINED" % last_jump_cost, safe_remaining)
 	if wave_system_active():
 		_wave_after_jump(rest_jump)
 	if jump_flash_enabled:
@@ -1952,6 +2066,19 @@ func _set_status(message: String, seconds: float) -> void:
 
 func reset_battle() -> void:
 	active_difficulty = clampi(difficulty, 0, 2)
+	pulse_charges = 0
+	pulse_drained = 0.0
+	pulse_drain_kills = 0
+	pulse_awards_earned = 0
+	pulse_charges_lost = 0
+	pulse_bombs.clear()
+	pulse_fields.clear()
+	pulse_detonations = 0
+	pulse_frozen_large = 0
+	pulse_frozen_fighters = 0
+	pulse_breachers_sent_home = 0
+	pulse_nukes_slowed = 0
+	pulse_freeze_left = 0.0
 	stealth_cooldown_remaining = 0.0
 	stealth_was_ready = false
 	stealth_launches = 0
@@ -2058,6 +2185,8 @@ func reset_battle() -> void:
 	earned_points = 0
 	repair_bonuses_earned = 0
 	repair_charges = 1
+	repair_earning_paused = false
+	repair_charges_lost = 0
 	breachers_destroyed = 0
 	wave = 1
 	_reset_wave_system()
@@ -2101,7 +2230,7 @@ func reset_battle() -> void:
 	wave_countdown = wave_interval_seconds
 	arrival_player.stop()
 	launch_player.stop()
-	_set_status("DEFEND THE LOWER SCOPE | JUMP IS YOUR ESCAPE", 4.0)
+	_set_status("DEFEND THE AEGIS | JUMP IS YOUR ESCAPE", 4.0)
 	if auto_spawn:
 		pending.append({"kind": "unknown", "faction": "unknown"})
 
@@ -2198,6 +2327,31 @@ func _play_launch(count: int) -> void:
 	interceptor_launch_played.emit(count)
 
 func _hostile_target(interceptor: Dictionary, excluded: Array[String]) -> Dictionary:
+	# 1.1.0: a hacking or draining Breacher first while no Gunship is out.
+	var hacker := _hacking_breacher_target(interceptor, excluded)
+	if not hacker.is_empty():
+		return hacker
+	# 1.1.0 PULSE BOMB: frozen Attack Drones first (anywhere on the scope), then frozen
+	# Enemy Carriers once no frozen drones are left.
+	if pulse_chase_missiles_first:
+		var close_missile := _interceptor_target_of(interceptor, excluded, ["missile"])
+		if not close_missile.is_empty() and close_missile.position.distance_to(own_ship_position) < 0.65:
+			return close_missile
+	var frozen_excluded: Array[String] = excluded.duplicate()
+	if pulse_chase_spread:
+		for other in contacts:
+			if other.id != interceptor.id and Icons.is_interceptor(other.kind) and not is_returning(other):
+				var claimed: String = other.get("target_id", "")
+				if not claimed.is_empty() and claimed != interceptor.get("target_id", ""):
+					frozen_excluded.append(claimed)
+	var frozen_drone := _nearest_frozen(interceptor.position, ["drone"], frozen_excluded)
+	if frozen_drone.is_empty() and pulse_chase_spread:
+		frozen_drone = _nearest_frozen(interceptor.position, ["drone"], excluded)
+	if not frozen_drone.is_empty():
+		return frozen_drone
+	var frozen_carrier := _nearest_frozen(interceptor.position, ["carrier"], excluded)
+	if not frozen_carrier.is_empty():
+		return frozen_carrier
 	# 1.08: a set number of Interceptors is assigned to a Siege Ship on the scope.
 	var siege := _siege_assignment(interceptor, excluded)
 	if not siege.is_empty():
@@ -2214,6 +2368,41 @@ func _hostile_target(interceptor: Dictionary, excluded: Array[String]) -> Dictio
 		return heavy
 	# Last: the Siege Ship, the only capital ship Interceptors will attack.
 	return _interceptor_target_of(interceptor, excluded, ["siege_ship"])
+
+## 1.1.0: true while a Gunship (not a Repair Tender) is out and not flying back.
+func gunship_out_attacking() -> bool:
+	for contact in contacts:
+		if contact.kind == "gunship" and not is_tender(contact) and contact.get("phase", "") != "return":
+			return true
+	return false
+
+## 1.1.0: the nearest hacking or draining Breacher this Interceptor may go after: it is
+## already on it, or fewer than Max Interceptors Per Tough Target are. Interceptors on
+## the Siege Ship stay there, and the Protect the convoy round keeps its own rules.
+func _hacking_breacher_target(interceptor: Dictionary, excluded: Array[String]) -> Dictionary:
+	if not interceptors_hacking_breachers_first or protect_active() or gunship_out_attacking():
+		return {}
+	var mine: String = interceptor.get("target_id", "")
+	var ship := siege_ship()
+	if not ship.is_empty() and mine == ship.id:
+		return {}
+	var chosen: Dictionary = {}
+	var best := INF
+	for other in contacts:
+		if other.kind != "breacher" or other.get("faction", "") != "hostile" or other.id in excluded or other.get("phase", "") not in ["hacking", "draining"]:
+			continue
+		if other.id != mine:
+			var chasing := 0
+			for mate in contacts:
+				if mate.id != interceptor.id and Icons.is_interceptor(mate.kind) and not is_returning(mate) and mate.get("target_id", "") == other.id:
+					chasing += 1
+			if chasing >= max_interceptors_per_tough_target:
+				continue
+		var gap: float = interceptor.position.distance_to(other.position) * (0.5 if other.id == mine else 1.0)
+		if gap < best:
+			best = gap
+			chosen = other
+	return chosen
 
 ## 1.08: the Siege Ship, if this Interceptor already attacks it or a place is free.
 func _siege_assignment(interceptor: Dictionary, excluded: Array[String]) -> Dictionary:
@@ -2333,7 +2522,14 @@ func _update_interceptors(delta: float) -> void:
 			if protect_dogfights and target.get("phase", "") == "protect":
 				_protect_interceptor_dogfight(interceptor, target, delta, removed)
 				continue
-			_steer(interceptor, target.position, interceptor_speed * fighter_speed_factor(), delta)
+			var chase := pulse_chase_speed_factor if float(target.get("frozen", 0.0)) > 0.0 else 1.0
+			_steer(interceptor, target.position, interceptor_speed * fighter_speed_factor() * chase, delta)
+			if target.kind == "carrier":
+				# 1.1.0 PULSE BOMB: Interceptors attack frozen Enemy Carriers (Siege Ship hit rate).
+				if interceptor.position.distance_to(target.position) <= 0.08 and interceptor.res_fire_remaining <= 0.0:
+					_hit_carrier(target, interceptor_siege_damage)
+					interceptor.res_fire_remaining = maxf(0.5, interceptor_siege_hit_interval) * fire_interval_factor()
+				continue
 			if target.kind == "siege_ship":
 				if interceptor.position.distance_to(target.position) <= 0.08 and interceptor.res_fire_remaining <= 0.0:
 					_hit_siege(target, interceptor_siege_damage, "interceptor")
@@ -2361,7 +2557,7 @@ func _update_interceptors(delta: float) -> void:
 					if interceptor.drone_fire_remaining > 0.0:
 						continue
 					interceptor.drone_fire_remaining = maxf(0.1, drone_interceptor_hit_interval) * fire_interval_factor()
-					target.interceptor_hits = int(target.get("interceptor_hits", drone_interceptor_hits)) - 1
+					target.interceptor_hits = int(target.get("interceptor_hits", drone_interceptor_hits)) - roundi(pulse_damage_factor(target))
 					if target.interceptor_hits > 0:
 						impacts.append({"position": target.position, "age": 0.0})
 						if target.get("phase", "") == "protect":
@@ -2463,6 +2659,7 @@ func _draw() -> void:
 	_draw_interceptor_squadrons(font)
 	_draw_convoy_effects()
 	_draw_explosions()
+	_draw_pulse(font)
 	# 1.2.0: rest tally above the rings and ships, below missiles still in flight.
 	_draw_rest_tally(font)
 	for contact in projectiles:
@@ -2542,7 +2739,7 @@ func _draw_contact(contact: Dictionary, font: Font) -> void:
 	var color := display_color(contact)
 	var state_alpha: float = color.a
 	if contact.kind == "nuke":
-		color = Color(1.0, 0.85, 0.2) if int(battle_time * 5.0) % 2 == 0 else Color(1.0, 0.12, 0.15)
+		color = nuke_marker_color(contact)
 		draw_arc(point, 16.0 * marker_scale, 0.0, TAU, 32, color, 2.0, true)
 	# A short arrival flash, not a repeated spawn or repeated sound.
 	var flash := maxf(0.0, 1.0 - contact.age / 0.7)
@@ -2892,7 +3089,7 @@ func _missiles_at(target_id: String) -> int:
 func _hit_carrier(base: Dictionary, damage: float = 1.0, from_gunship: bool = false) -> void:
 	if base.is_empty() or base.kind != "carrier" or find_contact(base.id).is_empty():
 		return
-	base.hits_remaining -= maxf(0.0, damage)
+	base.hits_remaining -= maxf(0.0, damage) * pulse_damage_factor(base)
 	if from_gunship:
 		gunship_missile_hits += 1
 	else:
@@ -3106,6 +3303,10 @@ func _gunship_target(gunship: Dictionary, removed: Array[String]) -> Dictionary:
 			chosen = contact
 	if not chosen.is_empty():
 		return chosen
+	# 1.1.0 PULSE BOMB: after nukes, frozen Enemy Carriers come first.
+	var frozen_carrier := _nearest_frozen(gunship.position, ["carrier"], removed)
+	if not frozen_carrier.is_empty():
+		return frozen_carrier
 	# After nuclear defense, stop computer hackers before attacking capitals,
 	# unless this Gunship is currently under Enemy Carrier flak attack.
 	var under_fire := false
@@ -3232,10 +3433,19 @@ func _fire_flak(base: Dictionary) -> String:
 		"age": 0.0, "target_id": target.id, "target_position": target.position})
 	return id
 
+## Colour of a nuclear missile marker: the yellow and red flash, or (1.1.0) the
+## ice-blue shimmer while a PULSE BOMB has slowed it.
+func nuke_marker_color(contact: Dictionary) -> Color:
+	if contact.get("pulse_slowed", false):
+		return display_color(contact)
+	return Color(1.0, 0.85, 0.2) if int(battle_time * 5.0) % 2 == 0 else Color(1.0, 0.12, 0.15)
+
 func _update_special_projectiles(delta: float) -> void:
 	for projectile in contacts.duplicate():
 		if projectile.kind == "nuke":
-			projectile.position = projectile.position.move_toward(own_ship_position, nuclear_speed * nuke_speed_factor() * (1.0 + float(projectile.get("speed_bonus", 0.0))) * movement_speed * delta)
+			# 1.1.0: a nuclear missile caught by a PULSE BOMB flies slower until it hits.
+			var slowed := pulse_nuke_speed_factor if projectile.get("pulse_slowed", false) else 1.0
+			projectile.position = projectile.position.move_toward(own_ship_position, nuclear_speed * nuke_speed_factor() * (1.0 + float(projectile.get("speed_bonus", 0.0))) * slowed * movement_speed * delta)
 			if _battery_try_nuke(projectile):
 				if is_defeated():
 					return
@@ -3316,10 +3526,10 @@ func _add_points(points: int) -> void:
 	var entitled := repair_bonuses_for(earned_points)
 	if entitled > repair_bonuses_earned:
 		var bonus := entitled - repair_bonuses_earned
-		repair_charges += bonus
 		repair_bonuses_earned = entitled
-		_set_status("BONUS RAPID REPAIR +%d | %d CHARGE%s" % [bonus, repair_charges, "" if repair_charges == 1 else "S"], 4.0)
+		_give_repair_charges(bonus)
 	_check_emp_award()
+	_check_pulse_award()
 	_check_rapid_missile_bonus()
 	_check_double_missile_bonus()
 
@@ -3610,7 +3820,7 @@ func _update_auto_jump() -> bool:
 	if not request_jump():
 		return false
 	auto_jumps += 1
-	_set_status("AUTO JUMP | HULL BELOW %d%% | -%d POINTS" % [roundi(auto_jump_hull_percent), jump_score_cost], safe_remaining)
+	_set_status("AUTO JUMP | HULL BELOW %d%% | -%d POINTS" % [roundi(auto_jump_hull_percent), last_jump_cost], safe_remaining)
 	return true
 
 func enemy_fighters() -> int:
@@ -3984,6 +4194,8 @@ func _update_breachers(delta: float) -> void:
 	for heavy in contacts.duplicate():
 		if heavy.kind != "breacher":
 			continue
+		if float(heavy.get("frozen", 0.0)) > 0.0:
+			continue
 		if heavy.phase in ["emp", "emp_return"]:
 			_update_emp_heavy(heavy, delta)
 			continue
@@ -4073,7 +4285,7 @@ func hacking_warning() -> String:
 func _hit_breacher(heavy: Dictionary) -> void:
 	if is_defeated() or heavy.is_empty() or heavy.kind != "breacher" or find_contact(heavy.id).is_empty():
 		return
-	heavy.health -= 1
+	heavy.health -= roundi(pulse_damage_factor(heavy))
 	impacts.append({"position": heavy.position, "age": 0.0})
 	if heavy.health > 0:
 		return
@@ -4093,6 +4305,7 @@ func request_rapid_repair() -> bool:
 		return false
 	rapid_repair_used = true
 	repair_charges -= 1
+	_check_repair_resume()
 	rapid_repair_remaining = maxf(0.1, rapid_repair_seconds)
 	rapid_repair_rate = max_hull * clampf(rapid_repair_percent, 0.0, 100.0) / 100.0 / rapid_repair_remaining
 	_set_status("RAPID REPAIR ENGAGED | %d CHARGE%s LEFT" % [repair_charges, "" if repair_charges == 1 else "S"], rapid_repair_remaining)
@@ -4378,6 +4591,39 @@ func repair_bonuses_for(points: int) -> int:
 		total += 1
 	return total
 
+## 1.1.0: most Rapid Repair charges that can be held on this level (0 = no limit).
+func repair_limit() -> int:
+	return maxi(0, rapid_repair_limit_easy if active_difficulty <= 0 else rapid_repair_limit)
+
+## 1.1.0: adds earned Rapid Repair charges up to the limit; the rest are lost. While
+## earning is paused at the limit, every earned charge is lost.
+func _give_repair_charges(bonus: int) -> void:
+	var limit := repair_limit()
+	var added := bonus
+	if limit > 0:
+		added = 0 if repair_earning_paused else clampi(limit - repair_charges, 0, bonus)
+	var lost := bonus - added
+	repair_charges += added
+	if lost > 0:
+		repair_charges_lost += lost
+		battle_event.emit("rapid repair charge%s lost at the limit (%d held) at %d points" % ["" if lost == 1 else "s", repair_charges, earned_points])
+	if limit > 0 and repair_charges >= limit and not repair_earning_paused:
+		repair_earning_paused = true
+		battle_event.emit("rapid repair limit reached (%d) | earning paused until %d left" % [limit, repair_resume_charges])
+	if added > 0:
+		var line := "BONUS RAPID REPAIR +%d | %d CHARGE%s" % [added, repair_charges, "" if repair_charges == 1 else "S"]
+		if repair_earning_paused:
+			line += " | EARNING AT %d CHARGE%s" % [repair_resume_charges, "" if repair_resume_charges == 1 else "S"]
+		_set_status(line, 4.0)
+
+## 1.1.0: when a charge is used and the player is down to Repair Resume Charges, earning
+## starts again at the next point total still ahead (totals passed while paused are lost).
+func _check_repair_resume() -> void:
+	if repair_earning_paused and repair_charges <= repair_resume_charges:
+		repair_earning_paused = false
+		repair_bonuses_earned = repair_bonuses_for(earned_points)
+		battle_event.emit("rapid repair earning resumed at %d charge%s" % [repair_charges, "" if repair_charges == 1 else "S"])
+
 func points_to_next_bonus() -> int:
 	return repair_bonus_threshold(repair_bonuses_for(earned_points) + 1) - earned_points
 
@@ -4504,7 +4750,7 @@ func _siege_escaped(ship: Dictionary) -> void:
 func _hit_siege(ship: Dictionary, damage: float, source: String) -> void:
 	if is_defeated() or ship.is_empty() or ship.kind != "siege_ship" or find_contact(ship.id).is_empty():
 		return
-	ship.hits_remaining -= maxf(0.0, damage)
+	ship.hits_remaining -= maxf(0.0, damage) * pulse_damage_factor(ship)
 	siege_hits_by[source] = siege_hits_by.get(source, 0) + 1
 	impacts.append({"position": ship.position, "age": 0.0})
 	if ship.hits_remaining > 0.0:
@@ -4771,17 +5017,22 @@ func can_launch_stealth() -> bool:
 func stealth_rebuild_seconds() -> float:
 	return stealth_rebuild_hard_seconds if active_difficulty >= 2 else stealth_rebuild_normal_seconds
 
-func launch_stealth() -> bool:
+func launch_stealth(use_pulse: bool = true) -> bool:
 	if not can_launch_stealth():
 		return false
 	var id := _new_id("SV")
+	var pulse_run := pulse_charges > 0 and use_pulse
 	contacts.append({"id": id, "kind": "stealth_interceptor", "faction": "friendly",
 		"position": launch_origin(0.0), "age": 0.0, "phase": "attack", "velocity": Vector3.ZERO,
-		"target_id": "", "nukes_left": maxi(1, stealth_nukes), "shot_timer": 0.0, "revealed": false})
+		"target_id": "", "nukes_left": 1 if pulse_run else maxi(1, stealth_nukes), "shot_timer": 0.0, "revealed": false,
+		"weapon": "PULSE" if pulse_run else "NUKES"})
 	stealth_launches += 1
 	stealth_was_ready = false
 	_play_launch(1)
-	_set_status("STEALTH INTERCEPTOR LAUNCHED | NUCLEAR STRIKE ON CAPITAL SHIPS", 3.0)
+	if pulse_run:
+		_set_status("STEALTH INTERCEPTOR LAUNCHED | PULSE BOMB STRIKE ON ENEMY CARRIERS", 3.0)
+	else:
+		_set_status("STEALTH INTERCEPTOR LAUNCHED | NUCLEAR STRIKE ON CAPITAL SHIPS", 3.0)
 	stealth_event.emit("Stealth Interceptor launched | %d large ships on screen" % large_ship_count())
 	return true
 
@@ -4818,7 +5069,17 @@ func _update_stealth(delta: float) -> void:
 		if ship.kind != "stealth_interceptor":
 			continue
 		ship.shot_timer = maxf(0.0, ship.shot_timer - delta)
-		if ship.phase == "attack":
+		if ship.phase == "attack" and ship.get("weapon", "NUKES") == "PULSE":
+			var aim := _pulse_aim(ship.position)
+			if aim.is_empty():
+				ship.phase = "return"
+			else:
+				var spot: Vector3 = aim.point
+				var standoff: Vector3 = spot + spot.direction_to(own_ship_position) * stealth_fire_range * 0.85
+				_steer(ship, standoff, speed, delta)
+				if ship.position.distance_to(spot) <= stealth_fire_range:
+					_drop_pulse_bomb(ship, aim)
+		if ship.phase == "attack" and ship.get("weapon", "NUKES") != "PULSE":
 			var target := _stealth_target(ship)
 			if target.is_empty():
 				# Nothing left to strike: bring the remaining nukes home.
@@ -5452,7 +5713,7 @@ func _award_systems_bonus() -> String:
 	if picked.is_empty():
 		return ""
 	match picked:
-		"REPAIR": repair_charges += 1
+		"REPAIR": _give_repair_charges(1)
 		"EMP": emp_charges += 1
 		"STEALTH": stealth_cooldown_remaining = 0.0
 		_: active_boosts[picked] = true
@@ -5510,7 +5771,8 @@ func _pick_bonus_from(names: Array[String]) -> String:
 
 func _bonus_applies(name: String) -> bool:
 	match name:
-		"REPAIR": return repair_charges < bonus_repair_cap
+		# 1.1.0: with a Rapid Repair limit, offered only while earning is not paused.
+		"REPAIR": return (not repair_earning_paused and repair_charges < repair_limit()) if repair_limit() > 0 else repair_charges < bonus_repair_cap
 		"EMP": return emp_enabled and emp_charges < maxi(1, emp_max_charges)
 		"STEALTH": return stealth_interceptor_enabled and active_difficulty > 0 and not stealth_out() and stealth_cooldown_remaining > 0.0
 		# 1.2.2: a free auto shield is wasted when AUTO DEFENSE SHIELD is already on.
@@ -5542,7 +5804,7 @@ func _wave_after_jump(rest_jump: bool) -> void:
 		wave_assault_time = 0.0
 		wave_siege_spawned = false
 		battle_event.emit("wave %d escaped by JUMP | the wave starts again" % wave)
-		_set_status("JUMP COMPLETE | -%d POINTS | WAVE %d STARTS AGAIN" % [jump_score_cost, wave], safe_remaining)
+		_set_status("JUMP COMPLETE | -%d POINTS | WAVE %d STARTS AGAIN" % [last_jump_cost, wave], safe_remaining)
 
 func _start_sweep() -> void:
 	wave_phase = "sweep"
@@ -7143,3 +7405,255 @@ func _tender_pick(gunship: Dictionary, current: Dictionary) -> Dictionary:
 	if best.is_empty() and not current.is_empty() and _tender_need(gunship, current) > -1.0:
 		return current
 	return best
+
+
+# ------------------------------------------------------------------
+# 1.1.0 PULSE BOMB. The Stealth Interceptor carries NUKES (as in
+# 1.0.9) or, while a score-earned charge is held, one PULSE BOMB (Normal every 40,000
+# points, Hard every 50,000, never on Easy, at most 1 held). The bomb freezes Enemy
+# Carriers, enemy fighters and the Siege Ship inside its area for 10 seconds (double damage while frozen); hacking
+# or draining Breachers break off and fly home as with USE EMP. Enemy missiles in
+# flight are not frozen; nuclear missiles in the area fly slower. Our ships are not
+# affected and keep fighting. Frozen enemies give normal points.
+# ------------------------------------------------------------------
+func _pulse_large_ships() -> Array:
+	var found: Array = []
+	for contact in contacts:
+		if contact.kind in CAPITAL_KINDS:
+			found.append(contact)
+	return found
+
+func _pulse_catches(spot: Vector3) -> int:
+	var count := 0
+	for contact in contacts:
+		if contact.kind in CAPITAL_KINDS and _pulse_gap(spot, contact.position) <= pulse_radius:
+			count += 1
+	return count
+
+func _pulse_gap(a: Vector3, b: Vector3) -> float:
+	return Vector2(a.x - b.x, a.y - b.y).length()
+
+## Where the bomb is aimed: the nearest Enemy Carrier, or (Most) the spot that catches
+## the most large ships (each large ship, and halfway between each pair).
+func _pulse_aim(from: Vector3) -> Dictionary:
+	var ships := _pulse_large_ships()
+	var carriers: Array = ships.filter(func(c: Dictionary) -> bool: return c.kind == "carrier")
+	if carriers.is_empty():
+		return {}
+	var best_spot := Vector3.INF
+	var best_count := -1
+	var best_gap := INF
+	var candidates: Array = []
+	if pulse_aim == 0:
+		for c in carriers:
+			candidates.append(c.position)
+	else:
+		for i in range(ships.size()):
+			candidates.append(ships[i].position)
+			for j in range(i + 1, ships.size()):
+				candidates.append((ships[i].position + ships[j].position) * 0.5)
+	for spot in candidates:
+		var count := 1 if pulse_aim == 0 else _pulse_catches(spot)
+		var gap: float = from.distance_to(spot)
+		if count > best_count or (count == best_count and gap < best_gap):
+			best_count = count
+			best_gap = gap
+			best_spot = spot
+	return {"point": best_spot, "count": best_count}
+
+func _drop_pulse_bomb(ship: Dictionary, aim: Dictionary) -> void:
+	pulse_bombs.append({"position": ship.position, "target": aim.point, "phase": "fly", "age": 0.0, "fuse": 0.0})
+	ship.nukes_left = 0
+	ship.revealed = true
+	ship.phase = "return"
+	pulse_charges = maxi(0, pulse_charges - 1)
+	stealth_nukes_fired += 1
+	_set_status("STEALTH INTERCEPTOR | PULSE BOMB AWAY", 2.5)
+	stealth_event.emit("Stealth Interceptor dropped a PULSE BOMB")
+
+func _update_pulse(delta: float) -> void:
+	if pulse_freeze_left > 0.0:
+		pulse_freeze_left -= delta
+		if pulse_freeze_left <= 0.0:
+			pulse_freeze_left = 0.0
+			_set_status(PULSE_ENDED_TEXT, 2.5)
+			battle_event.emit("pulse bomb freeze ended")
+	for index in range(pulse_fields.size() - 1, -1, -1):
+		var field: Dictionary = pulse_fields[index]
+		field.age += delta
+		field.remaining -= delta
+		if field.remaining <= 0.0:
+			pulse_fields.remove_at(index)
+	for index in range(pulse_bombs.size() - 1, -1, -1):
+		var bomb: Dictionary = pulse_bombs[index]
+		bomb.age += delta
+		if bomb.phase == "fly":
+			bomb.position = bomb.position.move_toward(bomb.target, delta * movement_speed * stealth_nuke_speed)
+			if bomb.position.distance_to(bomb.target) <= 0.01:
+				bomb.phase = "fuse"
+		elif bomb.phase == "fuse":
+			bomb.fuse += delta
+			if bomb.fuse >= pulse_fuse_seconds:
+				pulse_bombs.remove_at(index)
+				_detonate_pulse(bomb.target)
+
+func _detonate_pulse(spot: Vector3) -> void:
+	pulse_detonations += 1
+	var large := 0
+	var fighters := 0
+	var home := 0
+	for contact in contacts:
+		if contact.get("faction", "") != "hostile" or _pulse_gap(spot, contact.position) > pulse_radius:
+			continue
+		if contact.kind == "nuke":
+			# Not frozen: slowed until it hits or is destroyed.
+			if pulse_nuke_speed_factor < 1.0 and not contact.get("pulse_slowed", false):
+				contact.pulse_slowed = true
+				pulse_nukes_slowed += 1
+			continue
+		if contact.kind == "breacher" and contact.get("phase", "") in ["hacking", "draining"]:
+			contact.phase = "emp"
+			contact.emp_remaining = maxf(0.1, emp_shimmer_seconds)
+			contact.velocity = Vector3.ZERO
+			home += 1
+			continue
+		if contact.kind in ["carrier", "siege_ship", "drone", "breacher"]:
+			contact.frozen = pulse_freeze_seconds
+			if contact.kind in CAPITAL_KINDS:
+				large += 1
+			else:
+				fighters += 1
+	pulse_frozen_large += large
+	pulse_frozen_fighters += fighters
+	pulse_breachers_sent_home += home
+	pulse_fields.append({"position": spot, "radius": pulse_radius, "remaining": 0.5, "age": 0.0})
+	if large + fighters > 0:
+		pulse_freeze_left = pulse_freeze_seconds
+	if is_instance_valid(emp_player):
+		emp_player.volume_db = emp_zap_volume_db
+		emp_player.play()
+	var line := "PULSE BOMB | %d LARGE SHIP%s AND %d FIGHTER%s FROZEN FOR %d S" % [large, "" if large == 1 else "S", fighters, "" if fighters == 1 else "S", int(pulse_freeze_seconds)]
+	if home > 0:
+		line += " | %d BREACHER%s SENT HOME" % [home, "" if home == 1 else "S"]
+	_set_status(line, 4.0)
+	stealth_event.emit(line)
+
+func _draw_pulse(_font: Font) -> void:
+	# Stephen 2026-10-25: no area ring; a short white flash where the bomb goes off.
+	for field in pulse_fields:
+		var life := clampf(float(field.age) / 0.45, 0.0, 1.0)
+		var point: Vector2 = projection(field.position).point
+		var fade := 1.0 - life
+		draw_circle(point, 12.0 + 36.0 * life, Color(1, 1, 1, 0.85 * fade * fade))
+		draw_arc(point, 14.0 + 40.0 * life, 0.0, TAU, 40, Color(pulse_color.lerp(Color.WHITE, 0.6), fade), 3.0, true)
+		draw_circle(point, 8.0 * fade + 2.0, Color(1, 1, 1, fade))
+	for bomb in pulse_bombs:
+		var point: Vector2 = projection(bomb.position).point
+		var lit := true
+		if bomb.phase == "fuse":
+			lit = int(float(bomb.fuse) * 8.0) % 2 == 0
+		var size := 5.0
+		var diamond := PackedVector2Array([point + Vector2(0, -size), point + Vector2(size, 0), point + Vector2(0, size), point + Vector2(-size, 0)])
+		draw_colored_polygon(diamond, Color.WHITE if lit else pulse_color)
+		draw_arc(point, size + 3.0, 0.0, TAU, 20, Color(pulse_color, 0.8), 1.0, true)
+
+## Drain: every whole second frozen, take pulse_drain_per_second of the current strength.
+## Attack Drones: pulse_drone_drain_per_second of their full strength, and the drain
+## can destroy them. Returns true when it destroyed the contact (caller removes it).
+func _pulse_drain_step(contact: Dictionary, delta: float) -> bool:
+	contact.drain_flash = maxf(0.0, float(contact.get("drain_flash", 0.0)) - delta)
+	if contact.get("faction", "") != "hostile":
+		return false
+	contact.drain_tick = float(contact.get("drain_tick", 0.0)) + delta
+	# The last whole second can land on the same frame the freeze ends.
+	var last_tick: bool = float(contact.get("frozen", 0.0)) <= 0.0 and contact.drain_tick >= 0.9
+	if contact.drain_tick < 1.0 and not last_tick:
+		return false
+	contact.drain_tick = maxf(0.0, contact.drain_tick - 1.0)
+	if contact.kind == "drone" and pulse_drone_drain_per_second > 0.0:
+		var hits := int(contact.get("interceptor_hits", drone_interceptor_hits))
+		if not contact.has("drain_full"):
+			contact.drain_full = maxi(1, hits)
+		var carry := float(contact.get("drain_carry", 0.0)) + float(contact.drain_full) * pulse_drone_drain_per_second
+		while carry >= 0.9999 and hits > 0:
+			hits -= 1
+			carry -= 1.0
+		contact.interceptor_hits = hits
+		contact.drain_carry = maxf(0.0, carry)
+		pulse_drained += float(contact.drain_full) * pulse_drone_drain_per_second
+		contact.drain_flash = 0.3
+		impacts.append({"position": contact.position, "age": 0.0})
+		if hits <= 0:
+			pulse_drain_kills += 1
+			_award_destroyed(contact)
+			return true
+		return false
+	if pulse_drain_per_second <= 0.0:
+		return false
+	var lost := 0.0
+	if contact.kind in ["carrier", "siege_ship"]:
+		lost = float(contact.hits_remaining) * pulse_drain_per_second
+		contact.hits_remaining = float(contact.hits_remaining) - lost
+	elif contact.kind == "breacher":
+		# Whole-hit enemies: keep the fraction and take a hit when it adds up to one.
+		var key := "health"
+		var current := float(contact.get(key, 1))
+		var carry := float(contact.get("drain_carry", 0.0)) + current * pulse_drain_per_second
+		if carry >= 1.0 and current > 1.0:
+			contact[key] = int(current) - 1
+			carry -= 1.0
+		contact.drain_carry = carry
+		lost = current * pulse_drain_per_second
+	else:
+		return false
+	pulse_drained += lost
+	contact.drain_flash = 0.3
+	impacts.append({"position": contact.position, "age": 0.0})
+	return false
+
+func pulse_damage_factor(contact: Dictionary) -> float:
+	return maxf(1.0, pulse_frozen_damage_factor) if float(contact.get("frozen", 0.0)) > 0.0 else 1.0
+
+func _nearest_frozen(from: Vector3, kinds: Array, excluded: Array[String]) -> Dictionary:
+	var chosen: Dictionary = {}
+	var best := INF
+	for contact in contacts:
+		if contact.kind not in kinds or contact.id in excluded or float(contact.get("frozen", 0.0)) <= 0.0:
+			continue
+		var gap: float = from.distance_to(contact.position)
+		if gap < best:
+			best = gap
+			chosen = contact
+	return chosen
+
+const PULSE_EARNED_TEXT := "PULSE BOMB EARNED | READY ON THE STEALTH WEAPON BUTTON"
+const PULSE_HELD_TEXT := "PULSE BOMB ALREADY HELD | ONLY 1 CAN BE CARRIED"
+const PULSE_ENDED_TEXT := "PULSE BOMB FREEZE ENDED"
+
+func pulse_step_points() -> int:
+	return pulse_bomb_hard_points if active_difficulty >= 2 else pulse_bomb_normal_points
+
+func _check_pulse_award() -> void:
+	if not pulse_bomb_enabled or not stealth_interceptor_enabled or active_difficulty < 1:
+		return
+	var entitled := int(earned_points / maxi(1, pulse_step_points()))
+	if entitled <= pulse_awards_earned:
+		return
+	var new_awards := entitled - pulse_awards_earned
+	pulse_awards_earned = entitled
+	var room := maxi(0, pulse_bomb_max_charges - pulse_charges)
+	pulse_charges += mini(room, new_awards)
+	pulse_charges_lost += maxi(0, new_awards - room)
+	if room > 0:
+		bonus_chimes += 1
+		if is_instance_valid(bonus_chime_player):
+			bonus_chime_player.volume_db = bonus_chime_volume_db
+			bonus_chime_player.play()
+		_set_status(PULSE_EARNED_TEXT, 4.0)
+		# A kill's own status line can come later in the same frame; show this one after it.
+		call_deferred("_set_status", PULSE_EARNED_TEXT, 4.0)
+		battle_event.emit("pulse bomb charge earned at %d points" % earned_points)
+	else:
+		_set_status(PULSE_HELD_TEXT, 4.0)
+		call_deferred("_set_status", PULSE_HELD_TEXT, 4.0)
+		battle_event.emit("pulse bomb charge lost (already holding %d) at %d points" % [pulse_charges, earned_points])

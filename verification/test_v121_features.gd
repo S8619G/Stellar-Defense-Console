@@ -47,14 +47,14 @@ func _run() -> void:
 	c.wave_cues_enabled = false
 
 	# --- Version 1.2.1 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 1.2.1")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9", "Version text reads STELLAR DEFENSE CONSOLE 1.0.9")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 1.2.1")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text reads STELLAR DEFENSE CONSOLE 1.1.0")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.9"
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.9", "Export presets name 1.2.1 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.0"
+		and presets.get_value("preset.1.options", "application/version", "") == "1.1.0", "Export presets name 1.2.1 files")
 
 	# --- Approved values ---
 	# 1.2.2: Enemy Carrier hits 10 -> 11 and Gunship Nuke Hit Interval 0.6 -> 0.7 (test_v122_features).

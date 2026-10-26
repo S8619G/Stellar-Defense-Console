@@ -151,10 +151,10 @@ func _run() -> void:
 	clean()
 
 	# --- 1. Version and Development Build ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Version 1.08")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Version 1.08")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe") and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip"), "Export names use 1.05")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe") and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip"), "Export names use 1.05")
 	check(not console.development_build, "Console starts with Development Build off")
 	var key := InputEventKey.new()
 	key.keycode = KEY_F1
@@ -340,7 +340,7 @@ func _run() -> void:
 	for button in buttons:
 		inside = inside and Rect2(Vector2.ZERO, panel.PANEL_SIZE).encloses(rect_of(button))
 	check(overlaps == 0, "Settings panel: no overlapping buttons or text")
-	check(inside and panel.PANEL_SIZE.y <= 1000.0, "Settings panel fits the 1080-pixel layout")
+	check(inside and panel.PANEL_SIZE.y <= 1060.0, "Settings panel fits the 1080-pixel layout (1.1.0: at least 10 px above and below)")
 	console.close_settings()
 
 	# --- 6. Explosions for fighters and capital ships ---

@@ -122,7 +122,7 @@ func _run() -> void:
 	panel.auto_firewall_button.button_pressed = true
 	check(near(c.score_multiplier_for(1, 5), 0.5, 0.001) and panel.multiplier_label.text.contains("x0.50") and panel.multiplier_detail.text.contains("5 AUTO OPTIONS"), "Each auto option is -10%: all five on gives x0.50")
 	# Layout: everything inside the panel, nothing overlapping, panel fits the 1920 x 1080 layout.
-	check(panel.PANEL_SIZE.y <= 1000 and panel.PANEL_SIZE.x <= 1800, "Taller panel still fits the screen")
+	check(panel.PANEL_SIZE.y <= 1060 and panel.PANEL_SIZE.x <= 1800, "Taller panel still fits the screen (1.1.0: FRAME RATE row, at least 10 px above and below)")
 	var controls: Array = []
 	for child in panel.panel.get_children():
 		if child is Button or child is HSlider:

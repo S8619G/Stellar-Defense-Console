@@ -112,6 +112,28 @@ const DamageEffects = preload("res://scripts/DamageEffects.gd")
 ## see-through background (0 = none).
 @export_range(0, 12) var score_screen_text_outline: int = 5
 
+@export_group("Frame Rate and Idle Screens")
+## 1.1.0 FRAME RATE setting: STANDARD draws at most this many frames a second.
+@export_range(30, 240) var standard_max_fps: int = 60
+## 1.1.0: SMOOTH matches the screen's refresh rate (V-Sync stays on). When the rate is
+## unknown it uses this. Never below Standard Max Fps, never without a limit.
+@export_range(60, 480) var smooth_fallback_fps: int = 144
+## 1.1.0: on the Game Over screen, the Settings screen (the pause) the game draws at this
+## many frames a second, and after Idle Sleep Seconds with no input it stops asking the
+## computer to stay awake. Any key, mouse or controller input restarts the wait.
+@export var idle_screens_enabled: bool = true
+@export_range(1, 60) var idle_max_fps: int = 10
+@export_range(10.0, 3600.0) var idle_sleep_seconds: float = 300.0
+## 1.1.0: true while an idle screen is up; seconds with no input on it; and whether the
+## game is asking the computer to stay awake.
+var idle_screen_active: bool = false
+var idle_seconds: float = 0.0
+var keep_awake: bool = true
+var _idle_last_msec: int = 0
+## 1.1.0: the regression gate sets SDC_NO_FRAME_CAP=1 so older timing checks run as in
+## 1.0.9; the frame-rate checks turn the limit back on.
+var frame_cap_disabled: bool = OS.get_environment("SDC_NO_FRAME_CAP") == "1"
+
 @export_group("Battle Readout")
 ## 1.1.0: the left-side readout lists enemies destroyed this battle (by every source),
 ## then our losses. EMP CHARGES is the last line, in the EMP blast color
@@ -189,6 +211,7 @@ var stats_row: int = -1
 var stats_pinned: bool = false
 ## 1.1.0: EMP CHARGES line under the battle readout, in the EMP blast color.
 var emp_readout: Label
+var pulse_readout: Label
 
 func _ready() -> void:
 	tuning_panel.visible = false  # F1 opens tuning without obscuring the game HUD.
@@ -388,6 +411,67 @@ func _apply_settings() -> void:
 	contacts.auto_rapid_repair = settings.auto_repair
 	if damage_effects:
 		damage_effects.set_screen_effects(settings.screen_effects)
+	_apply_frame_rate()
+
+# ------------------------------------------------------------------
+# 1.1.0: FRAME RATE setting and idle screens
+# ------------------------------------------------------------------
+## Frames a second for the chosen FRAME RATE: STANDARD 60, SMOOTH the screen's rate.
+func chosen_max_fps() -> int:
+	if not settings.get("smooth_frame_rate", false):
+		return standard_max_fps
+	var rate := roundi(DisplayServer.screen_get_refresh_rate())
+	if rate <= 0:
+		rate = smooth_fallback_fps
+	return maxi(standard_max_fps, rate)
+
+## The frame-rate limit right now: Idle Max Fps on an idle screen, else the chosen rate.
+## Headless test runs (no window) keep no limit, as in 1.0.9.
+func target_max_fps() -> int:
+	if DisplayServer.get_name() == "headless" or frame_cap_disabled:
+		return 0
+	if idle_screen_active:
+		return idle_max_fps
+	return chosen_max_fps()
+
+func _apply_frame_rate() -> void:
+	Engine.max_fps = target_max_fps()
+
+## Game Over (from the ship being destroyed), the Settings screen (the pause) and its
+## Controller panel. The bonus pick pop-up closes by itself and is not included.
+func idle_screen_wanted() -> bool:
+	return idle_screens_enabled and (settings_open or contacts.is_defeated())
+
+func _set_keep_awake(on: bool) -> void:
+	if keep_awake == on:
+		return
+	keep_awake = on
+	DisplayServer.screen_set_keep_on(on)
+	log_event("computer may sleep (idle %d s)" % roundi(idle_seconds) if not on else "keeping the computer awake again")
+
+## Runs every frame: switches the idle screen on and off and counts the idle time with
+## the real clock (frames are slow on an idle screen).
+func _update_idle_screen() -> void:
+	var now := Time.get_ticks_msec()
+	var step := clampf(float(now - _idle_last_msec) / 1000.0, 0.0, 5.0) if _idle_last_msec > 0 else 0.0
+	_idle_last_msec = now
+	var wanted := idle_screen_wanted()
+	if wanted != idle_screen_active:
+		idle_screen_active = wanted
+		idle_seconds = 0.0
+		_set_keep_awake(true)
+		_apply_frame_rate()
+	if not idle_screen_active:
+		return
+	idle_seconds += step
+	if keep_awake and idle_seconds >= idle_sleep_seconds:
+		_set_keep_awake(false)
+
+## Any key, mouse or controller input on an idle screen restarts the 5-minute wait.
+func note_activity() -> void:
+	idle_seconds = 0.0
+	if idle_screen_active:
+		_set_keep_awake(true)
 
 func _on_settings_changed(new_settings: Dictionary) -> void:
 	var old_difficulty: int = settings.difficulty
@@ -632,6 +716,7 @@ static func launch_state_text(in_hangar: int, ready: int, ready_in: float) -> St
 	return "READY IN %ds" % maxi(1, ceili(ready_in))
 
 func _process(delta: float) -> void:
+	_update_idle_screen()
 	_update_sweep_sound(delta)
 	if bonus_pick_open and not contacts.missile_bonus_offer_open:
 		_drop_bonus_pick()
@@ -649,10 +734,10 @@ func _process(delta: float) -> void:
 	if contacts.jump_offline:
 		jump_button.text = "JUMP\n%sOFFLINE" % jump_tag
 	else:
-		jump_button.text = ("JUMP\n%s-%d POINTS" % [jump_tag, contacts.jump_score_cost]) if contacts.jump_recharge_remaining <= 0.0 else "JUMP\n%sCHARGING %ds" % [jump_tag, ceili(contacts.jump_recharge_remaining)]
+		jump_button.text = ("JUMP\n%s-%d POINTS" % [jump_tag, contacts.jump_cost_now()]) if contacts.jump_recharge_remaining <= 0.0 else "JUMP\n%sCHARGING %ds" % [jump_tag, ceili(contacts.jump_recharge_remaining)]
 	if contacts.protect_active():
 		jump_button.text = "JUMP\nHELD | PROTECT THE CONVOY"
-	_tip(jump_button, "Escape for %d points (score cannot go below zero). Damage and remaining defense reserve are retained." % contacts.jump_score_cost)
+	_tip(jump_button, "Escape for %d points: %d or %d%% of the score, whichever is bigger (score cannot go below zero). Free between waves. Damage and remaining defense reserve are retained." % [contacts.jump_cost_now(), contacts.jump_score_cost, roundi(contacts.jump_score_percent)])
 	prox_button.disabled = not contacts.can_fire_battery()
 	prox_button.set_pressed_no_signal(contacts.prox_active)
 	var charge := int(contacts.battery_percent())
@@ -695,7 +780,7 @@ func _process(delta: float) -> void:
 		repair_button.text = "RAPID REPAIR\n%sNO CHARGES" % repair_tag
 	else:
 		repair_button.text = "RAPID REPAIR\n%s+%d%% / %d CHARGE%s" % [repair_tag, int(contacts.rapid_repair_percent), contacts.repair_charges, "" if contacts.repair_charges == 1 else "S"]
-	_tip(repair_button, "Restore up to %d%% of maximum hull over %.1f seconds per charge. Bonus charges at %d, %d and %d earned points, then every %d more; JUMP penalties do not reduce progress." % [int(contacts.rapid_repair_percent), contacts.rapid_repair_seconds, contacts.repair_bonus_threshold(1), contacts.repair_bonus_threshold(2), contacts.repair_bonus_threshold(3), contacts.later_bonus_step])
+	_tip(repair_button, "Restore up to %d%% of maximum hull over %.1f seconds per charge. Bonus charges at %d, %d and %d earned points, then every %d more; JUMP penalties do not reduce progress. At most %d charges are held; at the limit, earning starts again when %d is left." % [int(contacts.rapid_repair_percent), contacts.rapid_repair_seconds, contacts.repair_bonus_threshold(1), contacts.repair_bonus_threshold(2), contacts.repair_bonus_threshold(3), contacts.later_bonus_step, contacts.repair_limit(), contacts.repair_resume_charges])
 	score_label.text = str(int(shown_score))
 	best_label.visible = show_best_score
 	best_label.text = "BEST %d" % best_score()
@@ -915,6 +1000,9 @@ func _load_wav(path: String) -> AudioStreamWAV:
 	return stream
 
 func _input(event: InputEvent) -> void:
+	if event is InputEventKey or event is InputEventMouse or event is InputEventJoypadButton or event is InputEventScreenTouch or event is InputEventScreenDrag \
+			or (event is InputEventJoypadMotion and absf(event.axis_value) > 0.3):
+		note_activity()
 	# 1.0.0: Esc in the Controller panel cancels CHANGE, then goes back to Settings.
 	if is_instance_valid(controller_panel) and controller_panel.visible and event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_ESCAPE:
 		controller_panel.back()
@@ -1399,6 +1487,12 @@ func _build_emp_readout() -> void:
 	emp_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	emp_readout.add_theme_font_size_override("font_size", readout_font_size)
 	battle_readout.add_child(emp_readout)
+	# 1.1.0: PULSE BOMB charges on their own line under EMP CHARGES.
+	pulse_readout = Label.new()
+	pulse_readout.name = "PulseReadout"
+	pulse_readout.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	pulse_readout.add_theme_font_size_override("font_size", readout_font_size)
+	battle_readout.add_child(pulse_readout)
 	_update_battle_readout()
 
 func _update_battle_readout() -> void:
@@ -1409,3 +1503,9 @@ func _update_battle_readout() -> void:
 	emp_readout.add_theme_color_override("font_color", contacts.emp_color)
 	emp_readout.position = Vector2(0.0, battle_readout.get_line_height() * battle_readout.get_line_count()
 		+ battle_readout.get_theme_constant("line_spacing") * battle_readout.get_line_count())
+	if is_instance_valid(pulse_readout):
+		# Normal and Hard only (no PULSE BOMB on Easy).
+		pulse_readout.visible = contacts.active_difficulty >= 1 and contacts.pulse_bomb_enabled and contacts.stealth_interceptor_enabled
+		pulse_readout.text = "PULSE BOMB  %d" % contacts.pulse_charges
+		pulse_readout.add_theme_color_override("font_color", contacts.emp_color)
+		pulse_readout.position = emp_readout.position + Vector2(0.0, emp_readout.get_line_height() + battle_readout.get_theme_constant("line_spacing"))

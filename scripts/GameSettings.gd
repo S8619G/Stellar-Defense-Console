@@ -13,6 +13,7 @@ const DEFAULTS := {
 	"auto_interceptors": false, "auto_gunships": false, "auto_jump": false,
 	"auto_repair": false, "remember_settings": true,
 	"screen_effects": true,
+	"smooth_frame_rate": false,
 }
 ## Settings that go back to their defaults on start when Remember Settings is OFF
 ## (volumes and mutes are always kept).
@@ -28,7 +29,7 @@ static func clean(raw: Dictionary, defaults: Dictionary = DEFAULTS) -> Dictionar
 	for key in ["effects_volume", "radar_volume"]:
 		if raw.has(key) and typeof(raw[key]) in [TYPE_INT, TYPE_FLOAT]:
 			out[key] = clampi(int(raw[key]), 0, 100)
-	for key in ["effects_muted", "radar_muted", "auto_battery", "auto_firewall", "auto_interceptors", "auto_gunships", "auto_jump", "auto_repair", "remember_settings", "screen_effects"]:
+	for key in ["effects_muted", "radar_muted", "auto_battery", "auto_firewall", "auto_interceptors", "auto_gunships", "auto_jump", "auto_repair", "remember_settings", "screen_effects", "smooth_frame_rate"]:
 		if raw.has(key) and typeof(raw[key]) == TYPE_BOOL:
 			out[key] = raw[key]
 	if raw.has("difficulty") and typeof(raw.difficulty) in [TYPE_INT, TYPE_FLOAT]:

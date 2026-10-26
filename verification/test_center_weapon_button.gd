@@ -80,8 +80,14 @@ func _run() -> void:
 	c._update_breachers(0.0)
 	await frames()
 	check(c.hack_state() in ["hacking","draining"], "Intrusion overlay fixture active")
-	check(ship.stealth_button.blocked_rect.size.x > 0.0, "Existing warning area has click priority")
-	check(not ship.stealth_button._has_point(ship.stealth_button.blocked_rect.get_center()), "Warning cannot trigger a weapon behind it")
+	if ship.breach_alert_on_ship_fill:
+		# 1.1.0 (approved breach alert): the warning moves to the ship fill and the NAV DATA
+		# window, so the STEALTH WEAPON button stays clickable during a breach.
+		check(ship.stealth_button.blocked_rect.size.x == 0.0, "Breach alert on the ship fill: STEALTH WEAPON button stays clickable")
+		check(ship.stealth_button._has_point(button_point(ship,Vector2(430,258))), "Center of the button still clickable during a breach")
+	else:
+		check(ship.stealth_button.blocked_rect.size.x > 0.0, "Existing warning area has click priority")
+		check(not ship.stealth_button._has_point(ship.stealth_button.blocked_rect.get_center()), "Warning cannot trigger a weapon behind it")
 	c._remove_contact(h.id)
 	await frames()
 	check(ship.stealth_button.blocked_rect.size.x == 0.0, "Full button restored after warning clears")

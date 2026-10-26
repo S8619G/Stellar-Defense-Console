@@ -65,14 +65,14 @@ func _run() -> void:
 	c.wave_changed.connect(func(n: int) -> void: changed_signals.append(n))
 	fresh(c, 1)
 	# --- Version 1.2.0 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 1.2.1")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9", "Version text reads STELLAR DEFENSE CONSOLE 1.0.9")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 1.2.1")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text reads STELLAR DEFENSE CONSOLE 1.1.0")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.9"
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.9", "Export presets name 1.2.1 files")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.0"
+		and presets.get_value("preset.1.options", "application/version", "") == "1.1.0", "Export presets name 1.2.1 files")
 
 	# --- Defaults (Inspector) ---
 	check(c.defined_waves and c.wave_system_active(), "Defined waves are on by default")
@@ -310,6 +310,9 @@ func _run() -> void:
 	c.bonus_low_tier_set = 1
 	c.bonus_medium_tier_set = 99
 	c.bonus_high_tier_set = 99
+	# 1.1.0: the cap of 3 is the rule without a Rapid Repair limit (test_sdc_110 covers the limit).
+	c.rapid_repair_limit = 0
+	c.rapid_repair_limit_easy = 0
 	c.repair_charges = 3
 	check(not c._bonus_applies("REPAIR"), "No extra repair at 3 charges")
 	c.repair_charges = 1

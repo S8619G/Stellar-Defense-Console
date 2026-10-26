@@ -271,7 +271,7 @@ func _run() -> void:
 	var inside := true
 	for b in [button, console.settings_panel.remember_button, console.settings_panel.reset_button, console.settings_panel.close_button, console.settings_panel.quit_button]:
 		inside = inside and panel_rect2.encloses(Rect2(b.position, b.size))
-	check(inside and console.settings_panel.PANEL_SIZE.y <= 1000.0, "Settings panel with the new row fits the 1080-pixel layout")
+	check(inside and console.settings_panel.PANEL_SIZE.y <= 1060.0, "Settings panel with the new row fits the 1080-pixel layout (1.1.0: FRAME RATE row too)")
 	check(button.position.y < console.settings_panel.remember_button.position.y and button.position.x == console.settings_panel.remember_button.position.x, "SCREEN EFFECTS row sits above REMEMBER SETTINGS, switch lined up with the others")
 	console.toggle_settings()
 	c.set_process(false)

@@ -11,7 +11,7 @@ import signal
 HERE = Path(__file__).resolve().parent
 DEFAULT_GAME = HERE / "source/Stellar_Defense_Console"
 if not DEFAULT_GAME.exists():
-    DEFAULT_GAME = HERE / "Stellar_Defense_Console"
+    DEFAULT_GAME = HERE
 TESTS = [
     "test_rebrand", "test_v130_features", "test_v129_features", "test_v128_features",
     "test_v127_features", "test_v123_features", "test_v122_features", "test_v121_features",
@@ -25,9 +25,9 @@ TESTS = [
     "test_controller", "test_controller_status", "test_hull_percentage",
     "test_internal_names",
     "test_launch_readiness", "test_bonus_pick_input", "test_bonus_pick_round_end", "test_protect_convoy",
-    "test_damage_effects", "test_sdc_109"
+    "test_damage_effects", "test_sdc_109", "test_sdc_110", "test_redraw_110"
 ]
-DISPLAY_TESTS = {"test_v103_features", "test_v105_features", "test_waves_update", "test_center_weapon_button", "test_hull_shield", "test_controller", "test_controller_status", "test_hull_percentage", "test_bonus_pick_input", "test_bonus_pick_round_end", "test_damage_effects", "test_sdc_109"}
+DISPLAY_TESTS = {"test_v103_features", "test_v105_features", "test_waves_update", "test_center_weapon_button", "test_hull_shield", "test_controller", "test_controller_status", "test_hull_percentage", "test_bonus_pick_input", "test_bonus_pick_round_end", "test_damage_effects", "test_sdc_109", "test_sdc_110", "test_redraw_110"}
 
 def main():
     parser = argparse.ArgumentParser()
@@ -52,8 +52,10 @@ def main():
                 command = ["xvfb-run", "-a", "-s", "-screen 0 1920x1080x24"] + command
         else:
             command.insert(1, "--headless")
+        # 1.1.0: older timing checks run without the frame-rate limit, as in 1.0.9.
+        env = dict(os.environ, SDC_NO_FRAME_CAP="1")
         process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-                                   text=True, start_new_session=(os.name == "posix"))
+                                   text=True, start_new_session=(os.name == "posix"), env=env)
         try:
             output, _ = process.communicate(timeout=180)
             exit_code = process.returncode

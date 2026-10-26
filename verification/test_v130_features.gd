@@ -88,17 +88,17 @@ func all_buttons(node: Node, out: Array) -> void:
 
 func _run() -> void:
 	# ---- Version and export presets ----
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 0.1.2")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 0.1.2")
 	var presets := ConfigFile.new()
 	check(presets.load("res://export_presets.cfg") == OK, "Export presets load")
 	check(presets.get_value("preset.0", "name") == "Windows Desktop" and presets.get_value("preset.0.options", "binary_format/architecture") == "x86_64"
-		and str(presets.get_value("preset.0", "export_path")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe"), "Windows x64 preset")
+		and str(presets.get_value("preset.0", "export_path")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe"), "Windows x64 preset")
 	check(presets.get_value("preset.2", "name") == "Windows Desktop ARM64" and presets.get_value("preset.2.options", "binary_format/architecture") == "arm64"
-		and str(presets.get_value("preset.2", "export_path")).ends_with("Stellar_Defense_Console_1.0.9_Windows_arm64.exe"), "Windows ARM64 preset")
+		and str(presets.get_value("preset.2", "export_path")).ends_with("Stellar_Defense_Console_1.1.0_Windows_arm64.exe"), "Windows ARM64 preset")
 	check(presets.get_value("preset.1", "platform") == "macOS" and presets.get_value("preset.1.options", "binary_format/architecture") == "universal"
-		and str(presets.get_value("preset.1", "export_path")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version") == "1.0.9", "Mac universal preset (Intel and M-series)")
-	check(presets.get_value("preset.0.options", "application/file_version") == "1.0.9" and presets.get_value("preset.2.options", "application/file_version") == "1.0.9", "Windows file versions follow the project version (as 1.2.9)")
+		and str(presets.get_value("preset.1", "export_path")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version") == "1.1.0", "Mac universal preset (Intel and M-series)")
+	check(presets.get_value("preset.0.options", "application/file_version") == "1.1.0" and presets.get_value("preset.2.options", "application/file_version") == "1.1.0", "Windows file versions follow the project version (as 1.2.9)")
 
 	# ---- Script defaults (1.2.9 behaviour) and the scene's 0.1.2 values ----
 	var plain: Control = load("res://scripts/RadarContacts.gd").new()

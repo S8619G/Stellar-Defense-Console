@@ -109,14 +109,14 @@ func _run() -> void:
 	c.battle_event.connect(func(m: String) -> void: events.append(m))
 
 	# --- Version 1.1.0 ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 1.1.1")
-	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9", "Version text reads STELLAR DEFENSE CONSOLE 1.0.9")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 1.1.1")
+	check(not console.test_build and console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text reads STELLAR DEFENSE CONSOLE 1.1.0")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip")
-		and presets.get_value("preset.1.options", "application/short_version", "") == "1.0.9"
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.9", "Export presets name 1.1.1 files and the Mac version is 1.1.1")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
+		and presets.get_value("preset.1.options", "application/short_version", "") == "1.1.0"
+		and presets.get_value("preset.1.options", "application/version", "") == "1.1.0", "Export presets name 1.1.1 files and the Mac version is 1.1.1")
 	check(int(presets.get_value("preset.0.options", "application/export_angle", 0)) == 1, "Windows export still includes the ANGLE files")
 
 	# --- 1. Battle readout: destroyed totals, losses, EMP in EMP blue ---

@@ -109,14 +109,14 @@ func _run() -> void:
 	clean()
 
 	# --- Full build naming ---
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Project version is 1.06")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Project version is 1.06")
 	check(not console.test_build, "Test Build is off by default (full build)")
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9", "Version text reads STELLAR DEFENSE CONSOLE 1.06 (no TEST)")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text reads STELLAR DEFENSE CONSOLE 1.06 (no TEST)")
 	var presets := ConfigFile.new()
 	presets.load("res://export_presets.cfg")
-	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Windows_x64.exe")
-		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.0.9_Mac.zip")
-		and presets.get_value("preset.1.options", "application/version", "") == "1.0.9", "Export presets name 1.06 files (no Test)")
+	check(String(presets.get_value("preset.0", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Windows_x64.exe")
+		and String(presets.get_value("preset.1", "export_path", "")).ends_with("Stellar_Defense_Console_1.1.0_Mac.zip")
+		and presets.get_value("preset.1.options", "application/version", "") == "1.1.0", "Export presets name 1.06 files (no Test)")
 
 	# --- Hover tooltips off by default ---
 	await frames(2)
@@ -151,9 +151,9 @@ func _run() -> void:
 			row_texts.append((child as Button).text)
 	check(not row_texts.has("DIAGNOSTIC LOG") and not row_texts.has("OPEN LOG FOLDER"), "DIAGNOSTIC LOG row and OPEN LOG FOLDER button removed")
 	check(not ("open_logs_button" in panel), "No OPEN LOG FOLDER button in the panel code")
-	check(panel.PANEL_SIZE == Vector2(860, 988), "Panel is 988 px tall (1.0.8: one row added for SCREEN EFFECTS)")
+	check(panel.PANEL_SIZE == Vector2(860, 1054), "Panel is 1054 px tall (1.0.8: one row added for SCREEN EFFECTS; 1.1.0: one more for FRAME RATE)")
 	var link: LinkButton = panel.version_label
-	check(link is LinkButton and link.text == "STELLAR DEFENSE CONSOLE 1.0.9", "Version text is a link reading STELLAR DEFENSE CONSOLE 1.06")
+	check(link is LinkButton and link.text == "STELLAR DEFENSE CONSOLE 1.1.0", "Version text is a link reading STELLAR DEFENSE CONSOLE 1.06")
 	var link_rect := Rect2(link.get_global_position() - panel.panel.get_global_position(), link.size)
 	# 1.08: the version text and the "!" icon beside it are centered together.
 	var icon_rect := Rect2(panel.log_icon_button.get_global_position() - panel.panel.get_global_position(), panel.log_icon_button.size)
@@ -190,7 +190,7 @@ func _run() -> void:
 			if text_rect(label).intersects(r):
 				overlaps += 1
 	check(overlaps == 0, "Settings panel: no overlapping buttons or text (%d controls)" % buttons.size())
-	check(panel.panel.position.y >= 0.0 and panel.PANEL_SIZE.y <= 1000.0, "Settings panel fits the 1080-pixel layout")
+	check(panel.panel.position.y >= 0.0 and panel.PANEL_SIZE.y <= 1060.0, "Settings panel fits the 1080-pixel layout (1.1.0: at least 10 px above and below)")
 	console.close_settings()
 
 	# --- Missiles and nukes on top ---

@@ -6,6 +6,8 @@ extends Control
 ## 1.07: the EMP is offered on the split FIREWALL button, so INTRUSION DETECTION
 ## always stays visible here (Emp On Ship brings back the 1.06 USE EMP box).
 const OUTLINE = preload("res://assets/ship_outline.png")
+## 1.1.0: the ship's fill in 45-degree stripes, for the breach alert.
+const BREACH_STRIPES = preload("res://assets/ship_breach_stripes.png")
 const FILL = preload("res://assets/ship_fill.png")
 const CenterWeaponButton = preload("res://scripts/ShipWeaponButton.gd")
 ## Traced from the actual center inset, matching the approved 2026-10-18 markup.
@@ -52,6 +54,10 @@ const REGION := Rect2(0, 0, 1352, 505)
 @export_range(4.0, 24.0) var intrusion_stripe_width: float = 9.0
 @export_range(0.5, 8.0) var intrusion_flash_hz: float = 3.0
 @export var intrusion_red := Color(0.86, 0.08, 0.12, 0.85)
+## 1.1.0: on = while a Breacher is hacking or draining, the whole ship
+## fill flashes red stripes and INTRUSION DETECTION shows in the NAV DATA window,
+## so nothing covers the STEALTH WEAPON buttons. Off = the 1.0.9 box on the ship.
+@export var breach_alert_on_ship_fill: bool = true
 @export_group("Rapid Repair and EMP")
 ## Outline color reached at the top of each Rapid Repair pulse.
 @export var repair_green := Color("#9dffb8")
@@ -69,6 +75,14 @@ const REGION := Rect2(0, 0, 1352, 505)
 @onready var battle: Control = get_node(contacts_path)
 var stealth_button: CenterWeaponButton
 var stealth_box := Rect2()
+## 1.1.0: the two pills (NUKES, PULSE) shown while a PULSE BOMB charge is held,
+## in REGION pixels, and their latest screen rectangles (local to this control).
+const PILL_NUKES := Rect2(140, 211, 270, 94)
+const PILL_PULSE := Rect2(440, 211, 270, 94)
+var nukes_pill_rect := Rect2()
+## Controller hold toward the PULSE BOMB: 0..1 while held, -1 when not held.
+var pulse_hold_progress: float = -1.0
+var pulse_pill_rect := Rect2()
 signal stealth_launched
 ## Invisible click area over the USE EMP box (shown only while the EMP can fire).
 var emp_button: Button
@@ -100,8 +114,24 @@ func _ready() -> void:
 	add_child(stealth_button)
 
 func _on_stealth_pressed() -> void:
-	if is_instance_valid(battle) and battle.launch_stealth():
+	if not is_instance_valid(battle):
+		return
+	var use_pulse := true
+	if int(battle.get("pulse_charges")) > 0:
+		# 1.1.0: the player picks a pill. Left half (NUKES pill side) keeps the
+		# charge for later; right half (PULSE pill side) drops the PULSE BOMB. A controller
+		# press (mouse not over the button) uses the PULSE BOMB.
+		var mouse := get_local_mouse_position()
+		if Rect2(stealth_box).has_point(mouse):
+			var split := (nukes_pill_rect.end.x + pulse_pill_rect.position.x) * 0.5
+			use_pulse = mouse.x >= split
+	fire_stealth(use_pulse)
+
+func fire_stealth(use_pulse: bool) -> bool:
+	if is_instance_valid(battle) and battle.launch_stealth(use_pulse):
 		stealth_launched.emit()
+		return true
+	return false
 
 func _on_emp_pressed() -> void:
 	if is_instance_valid(battle) and battle.request_emp():
@@ -122,9 +152,64 @@ func _process(_delta: float) -> void:
 			stealth_button.size = stealth_box.size
 			# Existing alert/EMP overlays keep priority. Clicking their box must
 			# never accidentally launch a special weapon underneath it.
-			var overlay: bool = (emp_on_ship and battle.can_use_emp()) or battle.hack_state() in ["hacking", "draining"]
+			var overlay: bool = (emp_on_ship and battle.can_use_emp()) or (battle.hack_state() in ["hacking", "draining"] and not breach_alert_on_ship_fill)
 			stealth_button.blocked_rect = Rect2(emp_box.position - stealth_box.position, emp_box.size) if overlay else Rect2()
-	queue_redraw()
+	_since_redraw += _delta
+	_check_redraw.call_deferred()
+
+# ---------- 1.1.0 REDRAW ONLY WHAT CHANGES ----------
+## 1.1.0: the ship is rebuilt every frame only while something on it moves (the
+## STEALTH WEAPON pulse, the flak arc, the USE EMP box); otherwise only when what it
+## shows changes. Off = every frame (1.0.9).
+@export var redraw_only_changes: bool = true
+## Safety net: a full rebuild at least this often (seconds), even when nothing changed.
+@export_range(0.1, 5.0) var redraw_safety_seconds: float = 1.0
+## Times the ship was rebuilt (for tests and the speed check).
+var redraw_count: int = 0
+var _redraw_key: Array = []
+var _since_redraw: float = 0.0
+var _key_props: Array[String] = []
+const KEY_SKIP: Array[String] = ["battle", "stealth_button", "emp_button", "redraw_count", "_redraw_key",
+	"_since_redraw", "_key_props", "_arc_cache", "_arc_cache_key"]
+
+## True while something on the ship moves every frame.
+func ship_animating() -> bool:
+	if not is_instance_valid(battle):
+		return false
+	return battle.can_launch_stealth() or (battle.prox_active and not battle.is_defeated()) \
+		or (emp_on_ship and battle.can_use_emp())
+
+## 1.1.0: everything the ship shows, in one list. A change in any of it = rebuild.
+func redraw_key() -> Array:
+	var key: Array = []
+	if _key_props.is_empty():
+		for property in get_property_list():
+			if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and not String(property.name) in KEY_SKIP:
+				_key_props.append(String(property.name))
+	for name in _key_props:
+		var value: Variant = get(name)
+		key.append(value.duplicate(true) if value is Array or value is Dictionary else value)
+	key.append(size)
+	if not is_instance_valid(battle):
+		return key
+	var state: String = battle.hack_state()
+	key.append_array([hull_display_color(), state, battle.can_launch_stealth(), battle.prox_active,
+		battle.is_defeated(), battle.can_use_emp(), battle.get("pulse_charges"), battle.get("pulse_color")])
+	if state in ["hacking", "draining"]:
+		key.append(int(battle.battle_time * intrusion_flash_hz * 2.0) % 2)
+	return key
+
+func _check_redraw() -> void:
+	if not redraw_only_changes or ship_animating() or _since_redraw >= redraw_safety_seconds:
+		_redraw_key = []
+		_since_redraw = 0.0
+		queue_redraw()
+		return
+	var key := redraw_key()
+	if key != _redraw_key:
+		_redraw_key = key
+		_since_redraw = 0.0
+		queue_redraw()
 
 static func damage_color(fraction: float) -> Color:
 	var value := clampf(fraction, 0.0, 1.0)
@@ -145,13 +230,20 @@ func hull_display_color() -> Color:
 	return tint
 
 func _draw() -> void:
+	redraw_count += 1
 	if not is_instance_valid(battle):
 		return
 	var width := minf(size.x, size.y * REGION.size.x / REGION.size.y)
 	var dimensions := Vector2(width, width * REGION.size.y / REGION.size.x)
 	var rect := Rect2((size - dimensions) * 0.5, dimensions)
 	var tint := hull_display_color()
-	draw_texture_rect_region(FILL, rect, REGION, Color(tint, fill_opacity))
+	if breach_fill_active():
+		# Black under the stripes, then red stripes that flash bright and dim.
+		var bright := int(battle.battle_time * intrusion_flash_hz * 2.0) % 2 == 0
+		draw_texture_rect_region(FILL, rect, REGION, Color(0, 0, 0, 0.85))
+		draw_texture_rect_region(BREACH_STRIPES, rect, REGION, Color(intrusion_red, 0.95 if bright else 0.45))
+	else:
+		draw_texture_rect_region(FILL, rect, REGION, Color(tint, fill_opacity))
 	draw_texture_rect_region(OUTLINE, rect, REGION, Color(tint, 0.95))
 	var k := dimensions.x / REGION.size.x
 	var weapon_polygon := center_weapon_points(rect)
@@ -174,8 +266,11 @@ func _draw() -> void:
 	emp_box = Rect2(middle - intrusion_box_size * 0.5, intrusion_box_size)
 	if emp_on_ship and battle.can_use_emp():
 		_draw_use_emp(middle)
-	elif battle.hack_state() in ["hacking", "draining"]:
+	elif battle.hack_state() in ["hacking", "draining"] and not breach_alert_on_ship_fill:
 		_draw_intrusion(middle)
+
+func breach_fill_active() -> bool:
+	return breach_alert_on_ship_fill and battle.hack_state() in ["hacking", "draining"]
 
 var _arc_cache_key := Rect2()
 var _arc_cache := PackedVector2Array()
@@ -322,17 +417,75 @@ func _draw_stealth_button(rect: Rect2, k: float) -> void:
 	border.append(points[0])
 	draw_polyline(border, stealth_blue.lerp(Color.WHITE, 0.45 * pulse), 1.0, true)
 	# Do not draw the weapon label through the pre-existing warning/EMP text.
-	if battle.hack_state() in ["hacking", "draining"] or (emp_on_ship and battle.can_use_emp()):
+	if (battle.hack_state() in ["hacking", "draining"] and not breach_alert_on_ship_fill) or (emp_on_ship and battle.can_use_emp()):
 		return
 	var font := ThemeDB.fallback_font
 	var center := rect.position + (CENTER_WEAPON_LABEL - REGION.position) * k
+	if int(battle.get("pulse_charges")) > 0:
+		_draw_weapon_pills(rect, k, pulse)
+		return
+	var label := stealth_label
 	var font_size := stealth_font_size
-	while font_size > 10 and font.get_string_size(stealth_label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > stealth_box.size.x - 16.0:
+	while font_size > 10 and font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > stealth_box.size.x - 16.0:
 		font_size -= 1
-	var w := font.get_string_size(stealth_label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+	var w := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
 	var at := center + Vector2(-w * 0.5, font_size * 0.36)
-	draw_string_outline(font, at, stealth_label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 3, Color(0, 0.05, 0.15, 0.9))
-	draw_string(font, at, stealth_label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1, 1, 1, 0.6 + 0.4 * pulse))
+	draw_string_outline(font, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 3, Color(0, 0.05, 0.15, 0.9))
+	draw_string(font, at, label, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(1, 1, 1, 0.6 + 0.4 * pulse))
+
+## 1.1.0: two pill buttons inside the blue STEALTH WEAPON area.
+func _draw_weapon_pills(rect: Rect2, k: float, pulse: float) -> void:
+	var font := ThemeDB.fallback_font
+	nukes_pill_rect = Rect2(rect.position + (PILL_NUKES.position - REGION.position) * k, PILL_NUKES.size * k)
+	pulse_pill_rect = Rect2(rect.position + (PILL_PULSE.position - REGION.position) * k, PILL_PULSE.size * k)
+	var mouse := get_local_mouse_position()
+	var split := (nukes_pill_rect.end.x + pulse_pill_rect.position.x) * 0.5
+	var over := Rect2(stealth_box).has_point(mouse) and pulse_hold_progress < 0.0
+	var ice: Color = battle.get("pulse_color")
+	var pills := [[nukes_pill_rect, "NUKES", Color(0.03, 0.10, 0.24), Color.WHITE, over and mouse.x < split],
+		[pulse_pill_rect, "PULSE", ice, Color(0.02, 0.08, 0.16), over and mouse.x >= split]]
+	for pill in pills:
+		var box: Rect2 = pill[0]
+		var style := StyleBoxFlat.new()
+		style.bg_color = pill[2].lerp(Color.WHITE, 0.25) if pill[4] else pill[2]
+		var holding_pulse: bool = pulse_hold_progress >= 0.0 and pill[1] == "PULSE"
+		if holding_pulse:
+			style.bg_color = Color(0.05, 0.22, 0.34)
+		style.set_corner_radius_all(int(box.size.y * 0.5))
+		style.set_border_width_all(2 if pill[4] else 1)
+		style.border_color = Color.WHITE.lerp(ice, 0.3) if pill[4] else Color(1, 1, 1, 0.55 + 0.35 * pulse)
+		style.anti_aliasing = true
+		draw_style_box(style, box)
+		if pulse_hold_progress >= 0.0:
+			if pill[1] == "NUKES":
+				# Holding the controller button: let go now for NUKES.
+				var ring := StyleBoxFlat.new()
+				ring.draw_center = false
+				ring.set_corner_radius_all(int(box.size.y * 0.5))
+				ring.set_border_width_all(2)
+				ring.border_color = Color(1.0, 0.89, 0.55)
+				ring.anti_aliasing = true
+				draw_style_box(ring, box.grow(2.0))
+			else:
+				# PULSE fills from left to right; full = PULSE BOMB.
+				var fill := StyleBoxFlat.new()
+				fill.bg_color = ice.lerp(Color.WHITE, 0.35)
+				fill.set_corner_radius_all(int(box.size.y * 0.5))
+				fill.anti_aliasing = true
+				var part := Rect2(box.position, Vector2(maxf(box.size.y, box.size.x * pulse_hold_progress), box.size.y))
+				if pulse_hold_progress > 0.02:
+					draw_style_box(fill, part)
+		var text: String = pill[1]
+		var font_size := stealth_font_size
+		while font_size > 9 and (font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x > box.size.x - 10.0 or font_size > box.size.y * 0.72):
+			font_size -= 1
+		var w := font.get_string_size(text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x
+		var at := box.get_center() + Vector2(-w * 0.5, font_size * 0.36)
+		if holding_pulse:
+			draw_string_outline(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, 3, Color(0.02, 0.08, 0.16))
+			draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color.WHITE)
+		else:
+			draw_string(font, at, text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, pill[3])
 
 func _text(value: String, center: Vector2, font_size: int, color: Color) -> void:
 	var font := ThemeDB.fallback_font

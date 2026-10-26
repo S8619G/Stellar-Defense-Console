@@ -14,7 +14,7 @@ func _initialize() -> void:
 
 func _run() -> void:
 	check(ProjectSettings.get_setting("application/config/name") == "Stellar Defense Console", "Original working title")
-	check(ProjectSettings.get_setting("application/config/version") == "1.0.9", "Pre-release version")
+	check(ProjectSettings.get_setting("application/config/version") == "1.1.0", "Pre-release version")
 	check(OS.get_user_data_dir().ends_with("Stellar Defense Console"), "Independent save directory")
 	check(not DirAccess.dir_exists_absolute("res://references"), "No reference directory")
 	var console: Control = load("res://scenes/RadarConsole.tscn").instantiate()
@@ -26,7 +26,7 @@ func _run() -> void:
 	c.auto_spawn = false
 	root.add_child(console)
 	await process_frame
-	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.0.9", "Product name in settings")
+	check(console.version_text() == "STELLAR DEFENSE CONSOLE 1.1.0", "Product name in settings")
 	check(console.github_url.is_empty() and console.settings_panel.version_label.disabled, "No stale public release link")
 	check(console.get_node("TopChrome").text == "RADAR", "Simple RADAR display label")
 	check(console.get_node("BottomButtons/Jump") == console.jump_button, "Jump button remains connected")

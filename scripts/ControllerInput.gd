@@ -31,6 +31,9 @@ const ControllerBindings = preload("res://scripts/ControllerBindings.gd")
 @export_range(0.05, 0.5) var repeat_interval: float = 0.13
 ## Jump needs the button held this long.
 @export_range(0.5, 3.0) var jump_hold_seconds: float = 1.0
+## 1.1.0: while a PULSE BOMB charge is held, the STEALTH WEAPON controller
+## button fires NUKES on a short press, or the PULSE BOMB when held this long.
+@export_range(0.5, 3.0) var stealth_pulse_hold_seconds: float = 1.0
 ## The battle highlight hides after this long without a direction; A then launches again.
 @export_range(2.0, 30.0) var battle_highlight_seconds: float = 6.0
 @export var highlight_color := Color(1.0, 0.89, 0.55, 0.9)
@@ -49,6 +52,9 @@ var dpad_direction := Vector2i.ZERO
 var repeat_timer: float = 0.0
 ## Jump hold in progress ("" = none).
 var jump_hold_button: String = ""
+## 1.1.0: STEALTH WEAPON hold in progress ("" = none).
+var stealth_hold_button: String = ""
+var stealth_hold_elapsed: float = 0.0
 var jump_elapsed: float = 0.0
 var jumps_fired: int = 0
 var jump_holds_cancelled: int = 0
@@ -319,6 +325,8 @@ func _press(id: String) -> void:
 				if chosen == console.jump_button:
 					# Jump keeps its one-second hold, even from the highlight.
 					start_jump(id)
+				elif _stealth_ship() != null and chosen == _stealth_ship().stealth_button and _pulse_choice_offered():
+					_start_stealth_hold(id)
 				else:
 					activate(chosen)
 				battle_highlight_idle = 0.0
@@ -330,9 +338,14 @@ func _press(id: String) -> void:
 func _release(id: String) -> void:
 	if id == jump_hold_button:
 		cancel_jump("released early")
+	if id == stealth_hold_button:
+		# Let go before the hold time: NUKES (the PULSE BOMB charge is kept).
+		_end_stealth_hold()
+		_fire_stealth(false)
 
 func _on_menu(where: String) -> void:
 	cancel_jump("menu")
+	_end_stealth_hold()
 	match where:
 		"picker":
 			# MENU closes the action list without a change; the panel stays open.
@@ -382,7 +395,12 @@ func perform(action: String, from_button: String = "") -> bool:
 		"launch_stealth":
 			# 1.0.4: the center special weapon, only while it is offered.
 			var ship: Control = console.get_node_or_null("ShipStatus")
-			return is_instance_valid(ship) and _press_button(ship.stealth_button)
+			if _pulse_choice_offered() and from_button != "":
+				# 1.1.0: short press NUKES, hold 1 second PULSE BOMB.
+				return _start_stealth_hold(from_button)
+			if is_instance_valid(ship) and ship.stealth_button.is_visible_in_tree():
+				return _fire_stealth(false) if _pulse_choice_offered() else _press_button(ship.stealth_button)
+			return false
 		"emp":
 			# 1.0.4: the EMP half of the FIREWALL button, else the EMP on the ship.
 			if is_instance_valid(console.emp_split_button) and console.emp_split_button.is_visible_in_tree():
@@ -411,6 +429,64 @@ func _press_button(button: BaseButton) -> bool:
 	else:
 		button.pressed.emit()
 	return true
+
+# ------------------------------------------------------------------
+# 1.1.0: controller choice between NUKES and PULSE BOMB
+# ------------------------------------------------------------------
+func _stealth_ship() -> Control:
+	if not is_instance_valid(console):
+		return null
+	var ship: Control = console.get_node_or_null("ShipStatus")
+	return ship if is_instance_valid(ship) and ship.has_method("fire_stealth") else null
+
+## Both weapons offered: the STEALTH WEAPON button is up and a PULSE BOMB charge is held.
+func _pulse_choice_offered() -> bool:
+	var ship := _stealth_ship()
+	return ship != null and ship.stealth_button.is_visible_in_tree() and int(console.contacts.get("pulse_charges")) > 0
+
+func _start_stealth_hold(from_button: String) -> bool:
+	if stealth_hold_button != "":
+		return true
+	stealth_hold_button = from_button
+	stealth_hold_elapsed = 0.0
+	_set_hold_progress(0.0)
+	return true
+
+func _end_stealth_hold() -> void:
+	stealth_hold_button = ""
+	stealth_hold_elapsed = 0.0
+	_set_hold_progress(-1.0)
+
+func _set_hold_progress(value: float) -> void:
+	var ship := _stealth_ship()
+	if ship != null:
+		ship.pulse_hold_progress = value
+
+func _fire_stealth(use_pulse: bool) -> bool:
+	var ship := _stealth_ship()
+	if ship == null or not ship.stealth_button.is_visible_in_tree():
+		return false
+	flash_control = ship.stealth_button
+	flash_left = press_flash_seconds
+	if is_instance_valid(overlay):
+		overlay.queue_redraw()
+	return ship.fire_stealth(use_pulse)
+
+func _update_stealth_hold(delta: float) -> void:
+	if stealth_hold_button == "":
+		return
+	if context() != "battle" or not _pulse_choice_offered():
+		_end_stealth_hold()
+		return
+	if not held.get(stealth_hold_button, false):
+		_end_stealth_hold()
+		_fire_stealth(false)
+		return
+	stealth_hold_elapsed += delta
+	_set_hold_progress(clampf(stealth_hold_elapsed / maxf(0.01, stealth_pulse_hold_seconds), 0.0, 1.0))
+	if stealth_hold_elapsed >= stealth_pulse_hold_seconds:
+		_end_stealth_hold()
+		_fire_stealth(true)
 
 func start_jump(from_button: String) -> bool:
 	if console.jump_button.disabled:
@@ -455,6 +531,7 @@ func _update_jump(delta: float) -> void:
 ## Window focus lost, controller unplugged and similar: forget held buttons.
 func release_all(reason: String) -> void:
 	cancel_jump(reason)
+	_end_stealth_hold()
 	held.clear()
 	trigger_down = {"lt": false, "rt": false}
 	stick_direction = Vector2i.ZERO
@@ -735,6 +812,7 @@ func hide_battle_highlight() -> void:
 
 func _process(delta: float) -> void:
 	_update_jump(delta)
+	_update_stealth_hold(delta)
 	if flash_left > 0.0:
 		flash_left -= delta
 		if flash_left <= 0.0:

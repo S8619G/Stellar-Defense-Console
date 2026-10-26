@@ -1,5 +1,73 @@
 # Stellar Defense Console changelog
 
+## 1.1.0
+
+### Top message bar
+
+- The message bar along the top of the scope says DEFEND THE AEGIS where it said DEFEND THE LOWER SCOPE. The text after the divider is unchanged.
+
+### JUMP cost
+
+- A JUMP during a wave costs 3,000 points or 10% of the current score, whichever is bigger (for example 4,600 points at a score of 46,000). Below 30,000 points nothing changes.
+- Every JUMP costs the same way; repeat jumps do not cost more. Auto jump pays the same cost.
+- The JUMP button, the side panel and the JUMP messages show the cost at that moment.
+- A JUMP during the rest between waves stays free. The score never goes below zero, and bonuses and EMP charges still count earned points.
+
+### Rapid Repair limit
+
+- At most 2 Rapid Repair charges on Easy and 4 on Normal and Hard.
+- Once the limit is reached, no charges are earned until 1 charge is left. A charge earned at the limit is lost. Earning then starts again at the next point total still ahead.
+- While earning is paused, the left panel shows EARNING AT 1 CHARGE in place of NEXT BONUS IN.
+- The end-of-set EXTRA RAPID REPAIR reward is offered only while earning is not paused and below the limit.
+
+### Idle screens
+
+- On the Game Over screen, the Settings screen and while the game is paused, the game draws at 10 frames a second. The screens look the same.
+- After 5 minutes with no key, mouse or controller input on these screens, the game no longer keeps the computer awake, so the computer's own sleep and screen-off settings apply.
+- Any input restarts the 5 minutes. Closing Settings, Retry or a new battle brings back the full frame rate. During a running battle the computer is still kept awake.
+
+### FRAME RATE setting
+
+- New FRAME RATE row on the Settings panel, under SCREEN EFFECTS, with one button that switches between STANDARD and SMOOTH. The Settings panel is one row taller.
+- STANDARD (the default, also for existing settings files): at most 60 frames a second.
+- SMOOTH: matches the screen's refresh rate, never above it.
+- The choice is saved with the other settings.
+
+### Graphics chip on Windows
+
+- The Windows builds no longer ask Nvidia and AMD drivers for the powerful graphics card. Windows chooses the graphics chip, usually the low-power one. The powerful card can still be chosen in Windows Settings > System > Display > Graphics, or in the Nvidia or AMD control panel.
+
+### Interceptors and hacking Breachers
+
+- While no Gunship is out attacking, a Breacher that is hacking or draining the ship is the first target for Interceptors, ahead of Attack Drones and missiles. Up to 2 Interceptors go after each one; the others keep defending.
+- Breachers that are only approaching are chased as before. A Gunship that is out attacking switches this off; a Gunship flying back to the ship does not.
+
+### PULSE BOMB
+
+- On Normal and Hard, a PULSE BOMB charge is earned every 40,000 points on Normal and every 50,000 on Hard. At most 1 is held; a charge earned while one is held is lost. Not on Easy.
+- While a charge is held, the STEALTH WEAPON button shows two buttons of the same size, NUKES and PULSE. NUKES launches the 2 nukes and keeps the charge; PULSE launches the PULSE BOMB. On a controller, a short press fires NUKES and a 1-second hold fires the PULSE BOMB (the PULSE button fills while held).
+- The STEALTH WEAPON button still lights up only while 3 or more large ships are on the scope.
+- The bomb goes off over the spot that catches the most large ships, with a short white flash. Every Enemy Carrier, Siege Ship and enemy fighter in its large area is frozen for 10 seconds: no moving, firing or launching. Frozen enemies show an ice-blue look and take double damage.
+- Frozen Enemy Carriers, the Siege Ship and Breachers also lose 5% of their current strength each second; this never destroys them on its own. Frozen Attack Drones lose 10% of their full strength each second and can be destroyed by it. All give normal points.
+- Hacking or draining Breachers in the area break off and fly home to their Enemy Carrier, as with USE EMP.
+- A nuclear missile heading for the ship inside the area is slowed to 60% of its speed until it hits or is destroyed, and shows an ice-blue shimmer. Other missiles in flight are not affected.
+- While enemies are frozen, Interceptors go after frozen Attack Drones first, each one a different drone, then frozen Enemy Carriers, and fly 1.5 times faster while chasing a frozen target. Gunships deal with nukes first, then attack frozen Enemy Carriers.
+- The left panel shows PULSE BOMB 0 or 1 under EMP CHARGES on Normal and Hard. New status messages tell when a PULSE BOMB is earned, already held, launched, dropped, what it froze, and when the freeze ends.
+- The Stealth Interceptor keeps its green colour on the way home after either weapon (it only blinks); it no longer fades toward white.
+
+### Breach alert
+
+- While a Breacher is hacking or draining, the whole ship fill flashes red and black stripes; the outline keeps the hull colour. The STEALTH WEAPON button (or the NUKES and PULSE buttons) stays on top and can always be clicked.
+- The NAV DATA window is set aside and flashes INTRUSION DETECTION. The same NAV DATA returns when the breach ends. The left panel still shows the breach details.
+
+### NAV DATA
+
+- One of the nearest-body names in the NAV DATA list is now HELIUM-3 FIELD.
+
+### Drawing
+
+- The console frame is redrawn only when something on it changes (and at least once a second), and the ship panel only while an effect plays or something changes. The picture is the same; the processor does less work each frame.
+
 ## 1.0.9
 
 ### Score and round boxes

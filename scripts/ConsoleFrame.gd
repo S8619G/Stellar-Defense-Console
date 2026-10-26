@@ -87,8 +87,109 @@ const STEPPING_ROWS: Array[int] = [0, 2, 4]
 const FADING_ROW := 1
 var panel_time: float = 0.0
 
+# ---------- 1.1.0 REDRAW ONLY WHAT CHANGES ----------
+@export_group("Redraw")
+## 1.1.0: the frame is rebuilt only when something it shows changes (a value, a
+## colour, a blink, the window size). The one slowly fading panel light has its own
+## small layer that is redrawn every frame. Off = the whole frame every frame (1.0.9).
+@export var redraw_only_changes: bool = true
+## Safety net: a full rebuild at least this often (seconds), even when nothing changed.
+@export_range(0.1, 5.0) var redraw_safety_seconds: float = 1.0
+## Times the frame was rebuilt (for tests and the speed check).
+var redraw_count: int = 0
+var _redraw_key: Array = []
+var _since_redraw: float = 0.0
+var _key_props: Array[String] = []
+## The fading light: drawn on this child layer so the rest of the frame can stay still.
+var fade_layer: Control
+var _fade_rect := Rect2()
+## Script values that change every frame without changing the picture by themselves.
+const KEY_SKIP: Array[String] = ["panel_time", "low_hull_time", "_nav_last_time", "_nav_connected",
+	"battle", "dome", "ship_status", "redraw_count", "_redraw_key", "_since_redraw", "_key_props",
+	"fade_layer", "_fade_rect"]
+
 func _ready() -> void:
 	mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade_layer = Control.new()
+	fade_layer.name = "FadeLayer"
+	fade_layer.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	fade_layer.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	fade_layer.draw.connect(_draw_fade_segment)
+	add_child(fade_layer)
+	for property in get_property_list():
+		if property.usage & PROPERTY_USAGE_SCRIPT_VARIABLE and not String(property.name) in KEY_SKIP:
+			_key_props.append(String(property.name))
+
+## 1.1.0: everything the frame shows, in one list. A change in any of it = rebuild.
+func redraw_key() -> Array:
+	var key: Array = []
+	for name in _key_props:
+		var value: Variant = get(name)
+		key.append(value.duplicate(true) if value is Array or value is Dictionary else value)
+	var holder := dome.get_parent() as Control
+	key.append_array([size, global_position, dome.sphere_radius, holder.global_position, holder.size,
+		panel_bar_levels(), scale_lit_count(), low_hull_warning_active(), low_hull_flash_on()])
+	var console := get_parent()
+	key.append_array([console.development_build, console.sweep_volume_db, console.hack_text_height(),
+		console.get_node("Background").color])
+	for path in ["HackAlert", "BattleStatus"]:
+		var label := console.get_node_or_null(path) as Control
+		key.append_array([label.position, label.size] if label != null else [null, null])
+	for button_name in ["LaunchInterceptors", "LaunchGunship", "Jump", "ProxDefense"]:
+		key.append(indicator_ready(button_name))
+	if ship_status != null:
+		key.append_array([ship_status.hull_display_color(), ship_status.get("breach_alert_on_ship_fill"),
+			ship_status.get("intrusion_red"), ship_status.get("intrusion_flash_hz"), ship_status.get("intrusion_stripe_width")])
+	if battle == null:
+		return key
+	var state: String = battle.hack_state()
+	# The shield charge shows as whole percents and 12 scale segments.
+	var charge: float = battle.battery_percent()
+	key.append_array([int(charge), int(round(12.0 * clampf(charge / 100.0, 0.0, 1.0))), charge <= 0.0, charge < 100.0,
+		battle.prox_active, battle.can_fire_battery(),
+		battle.battery_restart_percent, battle.prox_burst_remaining, battle.prox_burst_seconds,
+		battle.repair_charges, battle.rapid_repair_remaining, battle.rapid_repair_percent,
+		battle.repair_earning_paused, battle.repair_resume_charges, battle.points_to_next_bonus(),
+		battle.score_multiplier(), battle.points_for(battle.fighter_points), battle.points_for(battle.breacher_points),
+		battle.points_for(battle.nuclear_points), battle.points_for(battle.carrier_points),
+		battle.points_for(battle.siege_points), battle.points_for(battle.battery_kill_points),
+		battle.jump_cost_now(), battle.active_difficulty, battle.wave, battle.wave_system_active(),
+		battle.waves_enabled, battle.active_bonus_names(), state,
+		battle.hull, battle.max_hull, battle.is_defeated(), battle.contacts.size(), battle.inbound_threats(),
+		battle.protect_round_counter, battle.protect_active()])
+	if battle.wave_system_active():
+		key.append_array([battle.wave_phase_line(), battle.wave_detail_line(), battle.wave_score_line()])
+	elif battle.waves_enabled:
+		key.append(ceili(battle.seconds_to_next_wave()))
+	var res: Dictionary = battle.siege_ship()
+	if not res.is_empty():
+		key.append_array([res.hits_remaining, res.max_hits, res.barrage_left, ceili(res.barrage_timer)])
+	if state != "":
+		key.append(battle.hacking_warning())
+	if state in ["hacking", "draining"]:
+		# The alert box blinks only while hacking or draining.
+		key.append(int(battle.battle_time * 4.0) % 2)
+	if ship_status != null and state in ["hacking", "draining"]:
+		key.append(int(battle.battle_time * float(ship_status.get("intrusion_flash_hz")) * 2.0) % 2)
+	if battle.protect_round_counter and battle.protect_active():
+		key.append(protect_counter_rows())
+	return key
+
+## Runs after this frame's game update: rebuild only if the list changed.
+func _check_redraw() -> void:
+	if not redraw_only_changes:
+		_redraw_key = []
+		queue_redraw()
+		return
+	var key := redraw_key()
+	if _since_redraw >= redraw_safety_seconds or key != _redraw_key:
+		_redraw_key = key
+		_since_redraw = 0.0
+		queue_redraw()
+
+func _draw_fade_segment() -> void:
+	if _fade_rect.size.x > 0.0:
+		fade_layer.draw_rect(_fade_rect, panel_color.lerp(panel_dim_color, panel_fade_amount()))
 
 func _process(delta: float) -> void:
 	panel_time += delta
@@ -111,9 +212,16 @@ func _process(delta: float) -> void:
 	if buttons != null and buttons.offset_top != want_top:
 		buttons.offset_top = want_top
 		buttons.offset_bottom = want_top + 64.0
-	queue_redraw()
+	_since_redraw += delta
+	_check_redraw.call_deferred()
+	if is_instance_valid(fade_layer):
+		fade_layer.queue_redraw()
 
 func _draw() -> void:
+	redraw_count += 1
+	_fade_rect = Rect2()
+	if is_instance_valid(fade_layer):
+		fade_layer.queue_redraw()
 	var right := size.x - 48.0
 	var bottom := size.y - 28.0
 	var outline := PackedVector2Array([Vector2(66,32), Vector2(right-18,32),
@@ -160,8 +268,12 @@ func _draw() -> void:
 		repair_state = "NO CHARGES"
 	_text(repair_state, left+Vector2(0,240), 26, TEXT)
 	_text("+%d%% HULL PER CHARGE" % int(battle.rapid_repair_percent), left+Vector2(0,274), 18, MUTED)
-	var next_bonus: int = battle.points_to_next_bonus()
-	_text("NEXT BONUS IN  %d PTS" % next_bonus, left+Vector2(0,306), 18, MUTED)
+	if battle.repair_earning_paused:
+		# 1.1.0: at the Rapid Repair limit no charges are earned until 1 is left.
+		_text("EARNING AT %d CHARGE%s" % [battle.repair_resume_charges, "" if battle.repair_resume_charges == 1 else "S"], left+Vector2(0,306), 18, MUTED)
+	else:
+		var next_bonus: int = battle.points_to_next_bonus()
+		_text("NEXT BONUS IN  %d PTS" % next_bonus, left+Vector2(0,306), 18, MUTED)
 	var side := Vector2(size.x-372,208)
 	var multiplier: float = battle.score_multiplier()
 	_text("TARGET VALUES" if is_equal_approx(multiplier, 1.0) else "TARGET VALUES  x%.2f" % multiplier, side, 19, MUTED)
@@ -181,7 +293,7 @@ func _draw() -> void:
 	var low := 40.0  # everything below the new MISSILE row moves down one row
 	draw_line(side+Vector2(0,234+low),side+Vector2(280,234+low),EDGE,1.0)
 	_text("JUMP COST",side+Vector2(0,274+low),19,MUTED)
-	_text("-%d POINTS" % battle.jump_score_cost,side+Vector2(0,316+low),26,TEXT)
+	_text("-%d POINTS" % battle.jump_cost_now(),side+Vector2(0,316+low),26,TEXT)
 	draw_line(side+Vector2(0,344+low),side+Vector2(280,344+low),EDGE,1.0)
 	_text("THREAT WAVE  |  %s" % ["EASY", "NORMAL", "HARD"][clampi(battle.active_difficulty, 0, 2)],side+Vector2(0,384+low),19,MUTED)
 	_text("WAVE %d" % battle.wave,side+Vector2(0,428+low),30,TEXT)
@@ -370,7 +482,9 @@ func _draw_corner_panels(o: Dictionary, k: float) -> void:
 		for seg in range(5):
 			var color := panel_color if seg < levels[i] else panel_dim_color
 			if i == FADING_ROW and seg == levels[i] - 1:
-				color = panel_color.lerp(panel_dim_color, panel_fade_amount())
+				# 1.1.0: drawn on the fade layer, in the same place and colour.
+				_fade_rect = Rect2(ex + (116.0 + 9.0 * seg) * k, y + 4.0 * k, 6.0 * k, 9.0 * k)
+				continue
 			draw_rect(Rect2(ex + (116.0 + 9.0 * seg) * k, y + 4.0 * k, 6.0 * k, 9.0 * k), color)
 	for i in range(LEFT_TABS.size()):
 		var y := top + (40.0 + 40.0 * i) * k
@@ -650,7 +764,9 @@ func _v2_panels(o: Dictionary, k: float) -> void:
 		for seg in range(5):
 			var color := panel_color if seg < levels[i] else panel_dim_color
 			if i == FADING_ROW and seg == levels[i] - 1:
-				color = panel_color.lerp(panel_dim_color, panel_fade_amount())
+				# 1.1.0: drawn on the fade layer, in the same place and colour.
+				_fade_rect = Rect2(outer + (10.0 + 9.0 * seg) * k, y + 4.0 * k, 6.0 * k, 9.0 * k)
+				continue
 			draw_rect(Rect2(outer + (10.0 + 9.0 * seg) * k, y + 4.0 * k, 6.0 * k, 9.0 * k), color)
 	for i in range(LEFT_TABS.size()):
 		var y := _mock(0.0, V2_TAB_TOP + V2_TAB_STEP * i).y
@@ -883,7 +999,7 @@ func alert_outline_color(state: String, blink: bool) -> Color:
 # ---------- 1.2.5: navigation data panel ----------
 const NAV_NAMES: Array[String] = ["KESTREL", "ORIN", "TALOS", "MERIDIAN", "HALCYON", "CEPHA", "IOLA", "SABLE", "ARDEN", "VESPER", "CALLIS", "NEREID", "THANE", "OSPREY", "LYRAN", "MARROW"]
 const NAV_STARS: Array[String] = ["M3 RED DWARF", "K2 ORANGE DWARF", "G5 YELLOW STAR", "F8 WHITE STAR", "BINARY K/M PAIR", "WHITE DWARF", "BROWN DWARF", "B9 BLUE GIANT"]
-const NAV_BODIES: Array[String] = ["GAS GIANT", "ICE GIANT", "ROCKY WORLD", "ASTEROID BELT", "OCEAN WORLD", "DEAD MOON", "TYLIUM FIELD", "NEBULA EDGE"]
+const NAV_BODIES: Array[String] = ["GAS GIANT", "ICE GIANT", "ROCKY WORLD", "ASTEROID BELT", "OCEAN WORLD", "DEAD MOON", "HELIUM-3 FIELD", "NEBULA EDGE"]
 const NAV_NOTES: Array[String] = ["RADIATION LOW", "RADIATION MODERATE", "ION STORM DISTANT", "DEBRIS FIELD NEAR", "NO SIGNALS", "COMMS RELAY QUIET", "DUST CLOUD THIN", "MAGNETIC FIELD WEAK"]
 
 func new_nav_location() -> void:
@@ -924,6 +1040,12 @@ func _v2_nav_box() -> void:
 		return
 	var k := _frame_scale()
 	var box := nav_box_poly()
+	# 1.1.0: during hacking or a breach the NAV DATA is set aside and the
+	# window flashes INTRUSION DETECTION. The NAV DATA comes back when it ends.
+	var ship := get_parent().get_node_or_null("ShipStatus")
+	if ship != null and ship.get("breach_alert_on_ship_fill") and battle.hack_state() in ["hacking", "draining"]:
+		_draw_nav_intrusion(box, k, ship)
+		return
 	draw_colored_polygon(box, panel_fill_color)
 	draw_polyline(box, panel_color.darkened(0.2), 1.5 * k, true)
 	var font := ThemeDB.fallback_font
@@ -936,3 +1058,42 @@ func _v2_nav_box() -> void:
 	for line in nav_lines:
 		draw_string(font, Vector2(x0, y + font.get_ascent(fs2)), line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs2, Color8(205, 145, 180))
 		y += font.get_height(fs2)
+
+## 1.1.0: INTRUSION DETECTION in the NAV DATA window (same red and black
+## stripes and flashing text as the 1.0.9 box on the ship).
+func _draw_nav_intrusion(box: PackedVector2Array, k: float, ship: Control) -> void:
+	var red: Color = ship.intrusion_red
+	var hz: float = ship.intrusion_flash_hz
+	draw_colored_polygon(box, Color.BLACK)
+	var shape := box.duplicate()
+	if shape.size() > 1 and shape[0] == shape[shape.size() - 1]:
+		shape.remove_at(shape.size() - 1)
+	var bounds := Rect2(shape[0], Vector2.ZERO)
+	for p in shape:
+		bounds = bounds.expand(p)
+	var w := maxf(2.0, ship.intrusion_stripe_width * k / 0.75)
+	var start := -bounds.size.y
+	while start < bounds.size.x:
+		var x0 := bounds.position.x + start
+		var band := PackedVector2Array([Vector2(x0, bounds.end.y), Vector2(x0 + w, bounds.end.y),
+			Vector2(x0 + w + bounds.size.y, bounds.position.y), Vector2(x0 + bounds.size.y, bounds.position.y)])
+		for piece in Geometry2D.intersect_polygons(band, shape):
+			draw_colored_polygon(piece, red)
+		start += w * 2.0
+	draw_polyline(box, Color(1.0, 0.16, 0.2), FRAME_WIDTH * k, true)
+	if int(battle.battle_time * hz * 2.0) % 2 == 0:
+		var font := ThemeDB.fallback_font
+		var fs := maxi(12, int(round(24.0 * k)))
+		var mid := bounds.get_center()
+		var lines := ["INTRUSION", "DETECTION"]
+		var lh := font.get_height(fs)
+		var widest := 0.0
+		for line in lines:
+			widest = maxf(widest, font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x)
+		var plate := Rect2(mid - Vector2(widest * 0.5 + 12.0 * k, lh + 8.0 * k), Vector2(widest + 24.0 * k, lh * 2.0 + 16.0 * k))
+		draw_rect(plate, Color(0, 0, 0, 0.82))
+		for i in lines.size():
+			var lw := font.get_string_size(lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+			var at := Vector2(mid.x - lw * 0.5, mid.y - lh + font.get_ascent(fs) + lh * i)
+			draw_string_outline(font, at, lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, 3, Color.BLACK)
+			draw_string(font, at, lines[i], HORIZONTAL_ALIGNMENT_LEFT, -1, fs, Color(1.0, 0.92, 0.9))
